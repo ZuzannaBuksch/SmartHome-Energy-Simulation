@@ -1,0 +1,15 @@
+Django<4
+psycopg2>=2.9
+djangorestframework>=3.13
+djangorestframework_simplejwt
+djoser
+django-environ
+django-cors-headers
+django-filter
+pytest==7.0.1
+isort>=5.10.1
+black>=22.1.0
+elasticsearch-dsl>=6.0, <7.0
+django-elasticsearch-dsl>=6.0,<7.0
+django-polymorphic
+pytest-django

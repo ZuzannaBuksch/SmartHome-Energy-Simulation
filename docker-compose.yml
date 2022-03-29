@@ -1,0 +1,30 @@
+version: '3.8'
+
+services:
+
+  sim-elasticsearch:
+    image: elasticsearch:6.4.2
+    volumes:
+      - .:/code/elasticsearch
+    ports:
+      - ${ELASTIC_PORT}:${ELASTIC_PORT}
+      
+  postgres:
+    image: postgres:12
+    env_file: .env
+    ports:
+    - ${POSTGRES_PORT}:${POSTGRES_PORT}
+    
+  simulation:
+    build:
+      context: ./simulation/
+      dockerfile: Dockerfile
+    command: python ./simulation/manage.py runserver 0.0.0.0:8000
+    env_file: .env
+    ports:
+      - "8666:8000"
+    volumes:
+      - .:/code
+      - ./static:/static
+    depends_on:
+      - sim-elasticsearch

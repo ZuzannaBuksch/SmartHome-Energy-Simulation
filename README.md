@@ -28,10 +28,10 @@ Additional docker.sh file is included. <br>
 **SmartHome management:** <br>
 User can see only his building and it's parts (rooms, scenes, devices etc) <br>
 `/api/buildings/` all user's buildings list view {GET, POST} <br>
-`/api/buildings/<id>/` selected building detail view (with building's rooms and scenes) {GET, PUT, PATCH, DELETE} <br>
+`/api/buildings/<id>/` selected building detail view {GET, PUT, PATCH, DELETE} <br>
 `/api/buildings/<id>/energy/` selected building energy data {GET} <br>
 `/api/rooms/` all user's building's rooms list view {GET, POST} <br>
-`/api/rooms/<id>/` selected room detail view (with room's devices and measuring devices) {GET, PUT, PATCH, DELETE} <br>
+`/api/rooms/<id>/` selected room detail view {GET, PUT, PATCH, DELETE} <br>
 `/api/devices/` all user's building's devices list view {GET, POST} <br>
 `/api/devices/<id>/` selected device detail view {GET, PUT, PATCH, DELETE} <br>
 

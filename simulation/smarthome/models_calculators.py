@@ -58,10 +58,9 @@ class EnergyReceiverCalculator(EnergyCalculator):
             diff_in_hours = self._calculate_difference_in_time(raport.turned_on, raport.turned_off)
             sum_of_hours += diff_in_hours
 
-        kwh_factor = device.energy_consumption / 1000 * sum_of_hours
-        print("device power: ", device.energy_consumption, "sum_of hours: ", sum_of_hours, "kwh: ", kwh_factor)
-        energy_consumed = kwh_factor
-        return {"energy_consumed": energy_consumed}
+        kwh_factor = device.energy_consumption / 1000 * sum_of_hours #think about rounding this factor 
+        print("device power: ", device.energy_consumption, "sum_of hours: ", sum_of_hours, "kwh: ", kwh_factor) 
+        return {"energy_consumed": kwh_factor}
 
     def _calculate_difference_in_time(self, turned_on: datetime, turned_off: datetime) -> float:
         diff = turned_off - turned_on

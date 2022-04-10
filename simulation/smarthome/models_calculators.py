@@ -1,11 +1,13 @@
 from abc import ABC
-from datetime import datetime
-from django.forms.models import model_to_dict
+from datetime import datetime, timedelta
 from typing import Dict
-from .models import Device, DeviceRaport
-from .documents import DeviceRaportDocument
-from elasticsearch_dsl import Search
+
+from django.forms.models import model_to_dict
 from elasticsearch import Elasticsearch
+from elasticsearch_dsl import Search
+
+from .documents import DeviceRaportDocument
+from .models import Device, DeviceRaport
 
 client = Elasticsearch()
 
@@ -49,11 +51,22 @@ class EnergyReceiverCalculator(EnergyCalculator):
         device -- instance of a device for calculating energy consumption for
         device_raports -- device power raports filtered by elasticsearch 
         """
+        sum_of_hours = 0.0
+        print("device ", device.name)
         for raport in device_raports:
-            print(raport.device, raport.turned_on, device.energy_consumption)
+            print("raport ", str(raport))
+            diff_in_hours = self._calculate_difference_in_time(raport.turned_on, raport.turned_off)
+            sum_of_hours += diff_in_hours
 
-        energy_consumed = "not_calculated_yet"
+        kwh_factor = device.energy_consumption / 1000 * sum_of_hours
+        print("device power: ", device.energy_consumption, "sum_of hours: ", sum_of_hours, "kwh: ", kwh_factor)
+        energy_consumed = kwh_factor
         return {"energy_consumed": energy_consumed}
+
+    def _calculate_difference_in_time(self, turned_on: datetime, turned_off: datetime) -> float:
+        diff = turned_off - turned_on
+        diff_in_hours = diff.total_seconds() / 3600
+        return diff_in_hours
 
 class EnergyGeneratorCalculator(EnergyCalculator):
     """Energy calculating class for energy generating devices"""

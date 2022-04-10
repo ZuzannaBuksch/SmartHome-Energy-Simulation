@@ -55,6 +55,13 @@ case "$1" in
     postgres-rm) #<user_id>
         docker-compose exec postgres psql -U postgres --command "delete from users_user as u where u.id = $2"
         ;;
+    start)
+        docker-compose build
+        docker-compose up  #docker must be up in order to execute the following commands properly
+        docker-compose run --rm simulation python simulation/manage.py makemigrations
+        docker-compose run --rm simulation python simulation/manage.py migrate
+        docker-compose run --rm simulation python simulation/manage.py search_index --rebuild
+    ;;
     --help|-h)
         echo "$help"
         ;;

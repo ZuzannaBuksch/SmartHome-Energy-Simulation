@@ -38,3 +38,19 @@ class DeviceRaportDocument(Document):
     def get_instances_from_related(self, related_instance):
         if isinstance(related_instance, Device):
             return related_instance.device_raports.all()
+
+
+
+# @registry.register_document
+# class WeatherDocument(Document):
+#     class Index:
+#         name = 'weather_raports'
+#         settings = {'number_of_shards': 1,
+#                     'number_of_replicas': 0}
+    
+#     class Django:
+#         model = WeatherRaport
+#         fields = [
+#             'datetime_from',
+#             'datetime_to',
+#         ]

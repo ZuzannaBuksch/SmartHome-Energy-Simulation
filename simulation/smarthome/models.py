@@ -71,3 +71,14 @@ class DeviceRaport(models.Model):
 
     def __str__(self):
         return f"Device raport: {str(self.id)} | device: {self.device.name}"
+
+# class WeatherRaport(models.Model):
+#     datetime_from = models.DateTimeField()
+#     datetime_to = models.DateTimeField(null=True, blank=True)
+
+#     class Meta:
+#         unique_together = ('datetime_from', 'datetime_to',)
+
+
+#     def __str__(self):
+#         return f"Weather raport: {str(self.id)}"

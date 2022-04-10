@@ -52,16 +52,12 @@ class EnergyReceiverCalculator(EnergyCalculator):
         device_raports -- device power raports filtered by elasticsearch 
         """
         sum_of_hours = 0.0
-        print("device ", device.name)
         for raport in device_raports:
-            print("raport ", str(raport))
             diff_in_hours = self._calculate_difference_in_time(raport.turned_on, raport.turned_off)
             sum_of_hours += diff_in_hours
 
-        kwh_factor = device.energy_consumption / 1000 * sum_of_hours
-        print("device power: ", device.energy_consumption, "sum_of hours: ", sum_of_hours, "kwh: ", kwh_factor)
-        energy_consumed = kwh_factor
-        return {"energy_consumed": energy_consumed}
+        kwh_factor = device.energy_consumption / 1000 * sum_of_hours #think about rounding this factor 
+        return {"energy_consumed": kwh_factor}
 
     def _calculate_difference_in_time(self, turned_on: datetime, turned_off: datetime) -> float:
         diff = turned_off - turned_on
@@ -86,7 +82,9 @@ class EnergyGeneratorCalculator(EnergyCalculator):
 
 class EnergyStorageCalculator(EnergyCalculator):
     """Energy calculating class for energy storing devices"""
+    # probably we should divide this class to two different classes. e.g. active energy storage (car etc.) and passive energy storage( battery etc.)
 
+    # what about energy consumption in e.g hybrid/electric cars? 
     def _calculate_energy_data(self, device: Device, device_raports: Search) -> Dict[str, float]:
         """Calculate energy stored by the device in a given time.
 

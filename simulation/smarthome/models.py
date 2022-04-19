@@ -1,3 +1,6 @@
+from datetime import datetime
+from xml.dom import ValidationErr
+
 from django.db import models
 from polymorphic.models import PolymorphicModel
 from users.models import User
@@ -36,15 +39,15 @@ class Device(PolymorphicModel):
 
 
 class EnergyReceiver(Device):
-    energy_consumption = models.FloatField()
+    energy_consumption = models.FloatField() # device_power
+    # napięcie zasialania, żeby wiedzieć jak szybko rozładuje akumulator
 
     def __str__(self):
         return f"Energy receiving device: {str(self.id)} | name: {self.name}"
 
 
 class EnergyGenerator(Device):
-    energy_generation = models.FloatField()
-    efficiency = models.FloatField()
+    energy_generation = models.FloatField() # generation_power
     
     def __str__(self):
         return f"Energy generating device: {str(self.id)} | name: {self.name}"
@@ -53,10 +56,20 @@ class EnergyGenerator(Device):
 class EnergyStorage(Device):
     capacity = models.FloatField()
     battery_charge = models.FloatField()
+    battery_voltage = models.FloatField()
     
     def __str__(self):
         return f"Energy storing device: {str(self.id)} | name: {self.name}"
 
+class DevicePowerSupplyRaport(models.Model):
+    connected_from= models.DateTimeField()
+    connected_to = models.DateTimeField(null=True, blank=True)
+    device = models.ForeignKey(
+        Device, null=True, on_delete=models.CASCADE, related_name="device_power_raports"
+    )
+    energy_receiver = models.ForeignKey(
+        EnergyReceiver, null=True, on_delete=models.CASCADE, related_name="receiver_power_raports"
+    )
 
 class DeviceRaport(models.Model):
     turned_on = models.DateTimeField()
@@ -72,13 +85,12 @@ class DeviceRaport(models.Model):
     def __str__(self):
         return f"Device raport: {str(self.id)} | device: {self.device.name}"
 
-# class WeatherRaport(models.Model):
-#     datetime_from = models.DateTimeField()
-#     datetime_to = models.DateTimeField(null=True, blank=True)
+class WeatherRaport(models.Model):
+    datetime_from = models.DateTimeField()
+    datetime_to = models.DateTimeField(null=True, blank=True)
+    solar_radiation = models.FloatField()
+    temperature = models.FloatField()
+    wind_speed = models.FloatField()
 
-#     class Meta:
-#         unique_together = ('datetime_from', 'datetime_to',)
-
-
-#     def __str__(self):
-#         return f"Weather raport: {str(self.id)}"
+    def __str__(self):
+        return f"Weather raport: {str(self.id)}"

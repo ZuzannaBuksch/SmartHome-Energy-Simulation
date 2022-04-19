@@ -3,7 +3,7 @@ from django_elasticsearch_dsl import Document, fields
 from django_elasticsearch_dsl.registries import registry
 from elasticsearch_dsl import connections
 
-from .models import Device, DeviceRaport
+from .models import Device, DeviceRaport, WeatherRaport
 
 connections.create_connection(**ELASTICSEARCH_CONNECTION)
 
@@ -37,22 +37,22 @@ class DeviceRaportDocument(Document):
 
 
 
-# @registry.register_document
-# class WeatherDocument(Document):
-#     class Index:
-#         name = 'weather_raports'
-#         settings = {'number_of_shards': 1,
-#                     'number_of_replicas': 0}
+@registry.register_document
+class WeatherDocument(Document):
+    class Index:
+        name = 'weather_raports'
+        settings = {'number_of_shards': 1,
+                    'number_of_replicas': 0}
     
-#     class Django:
-#         model = WeatherRaport
-#         fields = [
-#             'datetime_from',
-#             'datetime_to',
-#             'solar_radiation', 
-#             'temperature', 
-#             'wind_speed',
-#         ]
+    class Django:
+        model = WeatherRaport
+        fields = [
+            'datetime_from',
+            'datetime_to',
+            'solar_radiation', 
+            'temperature', 
+            'wind_speed',
+        ]
 
 # @registry.register_document
 # class DevicePowerSupplyDocument(Document):

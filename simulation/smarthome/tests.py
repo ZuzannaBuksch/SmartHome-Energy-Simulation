@@ -69,7 +69,7 @@ class EnergyTestCase(TestCase):
 
         DeviceRaport.objects.create(id=10, device=devices[0], turned_on=turned_on_1, turned_off=turned_off_1)
         DeviceRaport.objects.create(id=11, device=devices[1], turned_on=turned_on_2, turned_off=turned_off_2)
-        DeviceRaport.objects.create(id=12, device=devices[2], turned_on=turned_on_3, turned_off=turned_off_3) #is this really create object in DB?
+        DeviceRaport.objects.create(id=12, device=devices[2], turned_on=turned_on_3, turned_off=turned_off_3)
         DeviceRaport.objects.create(id=13, device=devices[0], turned_on=turned_on_4, turned_off=turned_off_4)
         DeviceRaport.objects.create(id=14, device=devices[1], turned_on=turned_on_4, turned_off=turned_off_4)
         response = self.client.get('/api/buildings/10/energy/', format='json')

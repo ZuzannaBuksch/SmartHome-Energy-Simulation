@@ -1,57 +1,116 @@
+from datetime import datetime
+
 from django.test import TestCase
-from .models import Building, DeviceRaport, EnergyReceiver, Room
-from users.models import User
 from rest_framework.test import APIClient
+from users.models import User
 
-
+from .models import (Building, DeviceRaport, EnergyGenerator, EnergyReceiver,
+                     Room, WeatherRaport)
 
 
 class EnergyTestCase(TestCase):
     client = APIClient()
 
+    def get_date_from_string(self, date):
+        date_format_str = '%Y-%m-%d %H:%M:%S'
+        return datetime.strptime(date, date_format_str)
+
     def setUpSingleHRD(self):
         """Single HRD - House, Room, Device"""
-        user = User.objects.create(id=0, email="usereczek@email.com", password="testusereczek123")
+
+        user = User.objects.create(id=0, email="defaultuser@email.com", password="defaultpassword")
         building = Building.objects.create(id=0, user=user, name="house")
-        room = Room.objects.create(id=0, building=building, name="kitchen", area=50)
-        return EnergyReceiver.objects.create(id=0, room=room, name="bulb", state=False, energy_consumption=50)
+        return EnergyReceiver.objects.create(id=0, building=building, name="bulb", state=False, device_power=60, supply_voltage=8)
         
     def test_calculate_single_HRD_consumption_right(self):
         """Energy consumped by single device is calculated correctly"""
+
         device = self.setUpSingleHRD()
-        turned_on = "2022-03-30 00:00:00"
-        turned_off = "2022-03-31 00:00:00"
-        DeviceRaport(id=0, device=device, turned_on=turned_on, turned_off=turned_off)
-        response = self.client.get('/api/buildings/0/energy/', format='json')
-        building_rooms = response.data.get("building_rooms", [])
-        room_devices = building_rooms[0].get("room_devices",[])
-        energy = room_devices[0].get("energy_consumed")
-        self.assertEqual(len(building_rooms), 1)
-        self.assertEqual(len(room_devices), 1)
-        self.assertEqual(energy, "not_calculated_yet")
+        turned_on = self.get_date_from_string("2022-03-30 00:00:00")
+        turned_off =  self.get_date_from_string("2022-03-31 00:00:00") #24 hours difference
+        DeviceRaport.objects.create(id=0, device=device, turned_on=turned_on, turned_off=turned_off)
+        response = self.client.get('/api/buildings/0/energy/', start_date='29-03-2022 10:02:01', format='json')
+        building_devices = response.data.get("building_devices", [])
+        energy = building_devices[0].get("energy_consumed")
+        self.assertEqual(len(building_devices), 1)
+        self.assertEqual(energy, 1.44) #(60 W / 1000) * 24 h
 
 
     def setUpSingleHRManyD(self):
         """Single HR - House, Room; Many Devices"""
-        user = User.objects.create(id=10, email="usereczek2@email.com", password="testusereczek123")
+        
+        user = User.objects.create(id=10, email="defaultuser@email.com", password="defaultpassword")
         building = Building.objects.create(id=10, user=user, name="house2")
-        room = Room.objects.create(id=10, building=building, name="kitchen2", area=50)
-        EnergyReceiver.objects.create(id=10, room=room, name="bulb1", state=False, energy_consumption=50)
-        EnergyReceiver.objects.create(id=11, room=room, name="bulb2", state=False, energy_consumption=50)
-        return EnergyReceiver.objects.create(id=12, room=room, name="bulb3", state=False, energy_consumption=50)
+        device_1 = EnergyReceiver.objects.create(id=10, building=building, name="bulb1", state=False, device_power=50, supply_voltage=8)
+        device_2 = EnergyReceiver.objects.create(id=11, building=building, name="bulb2", state=False, device_power=60, supply_voltage=8)
+        device_3 = EnergyReceiver.objects.create(id=15, building=building, name="bulb3", state=False, device_power=70, supply_voltage=8)
+        energy_receivers = []
+        energy_receivers.append(device_1)
+        energy_receivers.append(device_2)
+        energy_receivers.append(device_3)
+        return energy_receivers
 
     def test_calculate_singleHR_many_device_energy_consumption_right(self):
         """Energy consumped by many devices in single house is calculated correctly"""
-        device = self.setUpSingleHRManyD()
 
-        turned_on = "2022-03-30 00:00:00"
-        turned_off = "2022-03-31 00:00:00"
-        DeviceRaport(id=11, device=device, turned_on=turned_on, turned_off=turned_off)
+        devices = self.setUpSingleHRManyD()
+        turned_on_1 = self.get_date_from_string("2022-03-30 12:00:00")
+        turned_off_1 =  self.get_date_from_string("2022-03-30 12:30:00") #diff = 0.5
+
+        turned_on_2 = self.get_date_from_string("2022-03-30 12:00:00")
+        turned_off_2 =  self.get_date_from_string("2022-03-30 14:30:00") #diff = 2.5
+
+        turned_on_3 = self.get_date_from_string("2022-03-30 10:00:00")
+        turned_off_3 =  self.get_date_from_string("2022-03-30 18:30:00") #diff = 8.5
+
+        turned_on_4 = self.get_date_from_string("2022-03-30 16:30:00")
+        turned_off_4 =  self.get_date_from_string("2022-03-30 18:30:00") #diff = 2
+
+        DeviceRaport.objects.create(id=10, device=devices[0], turned_on=turned_on_1, turned_off=turned_off_1)
+        DeviceRaport.objects.create(id=11, device=devices[1], turned_on=turned_on_2, turned_off=turned_off_2)
+        DeviceRaport.objects.create(id=12, device=devices[2], turned_on=turned_on_3, turned_off=turned_off_3)
+        DeviceRaport.objects.create(id=13, device=devices[0], turned_on=turned_on_4, turned_off=turned_off_4)
+        DeviceRaport.objects.create(id=14, device=devices[1], turned_on=turned_on_4, turned_off=turned_off_4)
         response = self.client.get('/api/buildings/10/energy/', format='json')
+        building_devices = response.data.get("building_devices", [])
+        energy_1 = round(building_devices[0].get("energy_consumed"), 6) #0.125000
+        energy_2 = round(building_devices[1].get("energy_consumed"), 6) #0.270000
+        energy_3 = round(building_devices[2].get("energy_consumed"), 6) #0.595000
+        sum_of_energy = energy_1 + energy_2 + energy_3
 
-        building_rooms = response.data.get("building_rooms", [])
-        room_devices = building_rooms[0].get("room_devices",[])
-        energy = room_devices[0].get("energy_consumed")
-        self.assertEqual(len(building_rooms), 1)
-        self.assertEqual(len(room_devices), 3)
-        self.assertEqual(energy, "not_calculated_yet")
+        self.assertEqual(len(building_devices), 3)
+        self.assertEqual(energy_1, 0.125000) 
+        self.assertEqual(energy_2, 0.270000)
+        self.assertEqual(energy_3, 0.595000)
+        #self.assertEqual(energy_3, 0.595) #be careful because sometimes there is rounding like this (AssertionError: 0.5950000000000001 != 0.595) -> it can be corrected and write tests 
+        self.assertEqual(sum_of_energy, 0.99) #0.125 + 0.27 + 0.595 = 0.99
+        
+
+    def setUpEnergyGenerator(self):
+        """Single HR - House, single energy generator"""
+
+        user = User.objects.create(id=1, email="user@email.com", password="defaultpassword")
+        building = Building.objects.create(id=1, user=user, name="house")
+        energy_generator = EnergyGenerator.objects.create(id=1, name='photovoltaics1', building=building, generation_power = 635.0)
+        return energy_generator
+   
+    def test_calculate_generated_energy(self):
+        """Energy generated is calculated correctly"""
+
+        self.setUpEnergyGenerator()
+        datetime_1 = self.get_date_from_string("2022-03-30 10:30:00")
+        datetime_2 =  self.get_date_from_string("2022-03-30 11:00:00")
+        datetime_3 = self.get_date_from_string("2022-03-30 12:00:00")
+        datetime_4 =  self.get_date_from_string("2022-03-30 12:15:00")
+        datetime_5 = self.get_date_from_string("2022-03-30 12:30:00")
+     
+        WeatherRaport.objects.create(id=0, datetime_from=datetime_1, datetime_to=datetime_2, solar_radiation=340.0, temperature=10.5, wind_speed=5.8)
+        WeatherRaport.objects.create(id=1, datetime_from=datetime_2, datetime_to=datetime_3, solar_radiation=360.0, temperature=10.5, wind_speed=4.0)
+        WeatherRaport.objects.create(id=2, datetime_from=datetime_3, datetime_to=datetime_4, solar_radiation=410.0, temperature=11.0, wind_speed=5.2)
+        WeatherRaport.objects.create(id=3, datetime_from=datetime_4, datetime_to=datetime_5, solar_radiation=312.0, temperature=11.5, wind_speed=5.8)
+ 
+        response = self.client.get('/api/buildings/1/energy/',  format='json')
+        building_devices = response.data.get("building_devices", [])
+        energy_generated = round(building_devices[0].get("energy_generated"), 6)
+
+        self.assertEqual(energy_generated, 0.514667) # 0.123825 + 0.26035 + 0.073025 + 0.0574675 = 0.5146675

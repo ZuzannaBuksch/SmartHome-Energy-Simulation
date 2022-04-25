@@ -1,15 +1,20 @@
 import json
-from django.forms.models import model_to_dict
 from datetime import datetime
+
+from django.forms.models import model_to_dict
 from django.shortcuts import get_object_or_404
-from rest_framework import viewsets
+from rest_framework import generics, mixins, viewsets
 from rest_framework.permissions import AllowAny
-from rest_framework import viewsets, mixins, generics
 from rest_framework.response import Response
-from .models import Building, Device, DeviceRaport, EnergyGenerator, EnergyReceiver, EnergyStorage, Room
 from users.models import User
-from .serializers import BuildingSerializer, BuildingListSerializer, DeviceSerializer, RoomSerializer, PopulateDatabaseSerializer, DeviceRaportListSerializer
+
+from .models import (Building, Device, DeviceRaport, EnergyGenerator,
+                     EnergyReceiver, EnergyStorage, Room)
 from .models_calculators import DeviceCalculateManager
+from .serializers import (BuildingListSerializer, BuildingSerializer,
+                          DeviceRaportListSerializer, DeviceSerializer,
+                          PopulateDatabaseSerializer, RoomSerializer)
+
 
 class BuildingViewSet(viewsets.ModelViewSet):
     queryset = Building.objects.all()
@@ -110,12 +115,8 @@ class BuildingEnergyView(mixins.RetrieveModelMixin, generics.GenericAPIView):
     def get(self, request, *args, **kwargs):
         building = get_object_or_404(Building, pk=kwargs.get('pk'))
         building_dict = model_to_dict(building)
-        building_dict["building_rooms"] = []
-        for room in building.building_rooms.all():
-            room_dict = model_to_dict(room)
-            room_dict["room_devices"] = []
-            for device in room.room_devices.all():
-                start_date = request.query_params.get("start_date")
-                room_dict["room_devices"].append(DeviceCalculateManager().get_device_energy(device, start_date))
-            building_dict["building_rooms"].append(room_dict)
+        building_dict["building_devices"] = []
+        for device in building.building_devices.all():
+            start_date = request.query_params.get("start_date")
+            building_dict["building_devices"].append(DeviceCalculateManager().get_device_energy(device, start_date))
         return Response(building_dict)

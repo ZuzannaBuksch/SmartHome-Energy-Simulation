@@ -1,25 +1,27 @@
 from rest_framework import serializers
 
-from .models import Building, Room, Device, DeviceRaport, EnergyGenerator, EnergyReceiver, EnergyStorage
+from .models import (Building, Device, DeviceRaport, EnergyGenerator,
+                     EnergyReceiver, EnergyStorage, Room)
+
 
 class EnergyGeneratorSerializer(serializers.ModelSerializer):
     class Meta:
         model = EnergyGenerator
-        fields = ('id', 'name', 'state', 'room', 'energy_generation','efficiency', 'type')
+        fields = ('id', 'name', 'state', 'room','efficiency', 'type', 'generation_power')
         read_only_fields = ('id', 'type',)
 
 
 class EnergyReceiverSerializer(serializers.ModelSerializer):
     class Meta:
         model = EnergyReceiver
-        fields = ('id', 'name', 'state', 'room', 'energy_consumption','type')
+        fields = ('id', 'name', 'state', 'room', 'device_power', 'type', 'supply_voltage')
         read_only_fields = ('id', 'type',)
 
 
 class EnergyStorageSerializer(serializers.ModelSerializer):
     class Meta:
         model = EnergyStorage
-        fields = ('id', 'name', 'state', 'room', 'capacity', 'battery_charge', 'type')
+        fields = ('id', 'name', 'state', 'room', 'capacity', 'battery_charge', 'type', 'battery_voltage')
         read_only_fields = ('id', 'type',)
 
 
@@ -60,11 +62,12 @@ class BuildingSerializer(serializers.ModelSerializer):
         default=serializers.CreateOnlyDefault(serializers.CurrentUserDefault())
     )
     building_rooms = RoomSerializer(many=True, read_only=True)
+    building_devices = DeviceSerializer(many=True, read_only=True)
 
     class Meta:
         model = Building
         fields = "__all__"
-        extra_fields = ["building_rooms"]
+        extra_fields = ["building_rooms", "building_devices"]
 
 
 class BuildingListSerializer(serializers.ModelSerializer):

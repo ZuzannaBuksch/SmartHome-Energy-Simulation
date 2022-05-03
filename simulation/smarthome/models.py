@@ -57,13 +57,19 @@ class EnergyGenerator(Device):
 
 
 class EnergyStorage(Device):
-    capacity = models.FloatField()
-    battery_charge = models.FloatField(null=True, blank=True) # You are trying to add a non-nullable field 'battery_voltage' to energystorage without a default; we can't do that (t (the database needs something to populate existing rows).
+    capacity = models.FloatField() #[Ah]
     battery_voltage = models.FloatField(null=True, blank=True) # You are trying to add a non-nullable field 'battery_voltage' to energystorage without a default; we can't do that (t (the database needs something to populate existing rows).
     
     def __str__(self):
         return f"Energy storing device: {str(self.id)} | name: {self.name}"
+    
+    #'NoneType' object has no attribute 'name'
+    # def save(self, *args, **kwargs):
+    #     device = super(EnergyStorage, self).save(*args, **kwargs)
+    #     raport = ChargeStateRaport(device=device, date=datetime.now(), charge_value = 0)
+    #     raport.save()
 
+# to do wyrzucenia? albo nie? może to jest raport zużycia energii przez urządzenie
 class DevicePowerSupplyRaport(models.Model):
     connected_from= models.DateTimeField()
     connected_to = models.DateTimeField(null=True, blank=True)
@@ -97,3 +103,72 @@ class WeatherRaport(models.Model):
 
     def __str__(self):
         return f"Weather raport: {str(self.id)}"
+
+# --------------do usuniecia--------------
+# zastąpione jednym raportem - StorageChargingAndUsageRaport
+class StorageChargingRaport(models.Model):
+    turned_on = models.DateTimeField()
+    turned_off = models.DateTimeField(null=True, blank=True)
+    device = models.ForeignKey(
+        EnergyStorage, null=True, on_delete=models.CASCADE, related_name="device_charging_raports"
+    )
+    battery_charge = models.FloatField() 
+    class Meta:
+        unique_together = ('device', 'turned_on',)
+
+
+    def __str__(self):
+        return f"Device raport: {str(self.id)} | device: {self.device.name}"
+
+class StorageUsageRaport(models.Model):
+    turned_on = models.DateTimeField()
+    turned_off = models.DateTimeField(null=True, blank=True)
+    device = models.ForeignKey(
+        EnergyStorage, null=True, on_delete=models.CASCADE, related_name="storage_usage_raports"
+    )
+    battery_charge = models.FloatField() 
+    energy_receiver = models.ForeignKey(
+        EnergyReceiver, null=True, on_delete=models.CASCADE, related_name="storage_usage_devices_raports"
+    )
+
+    class Meta:
+        unique_together = ('device', 'turned_on',)
+
+
+    def __str__(self):
+        return f"Device raport: {str(self.id)} | device: {self.device.name}"
+
+# --------------------------------------------
+class StorageChargingAndUsageRaport(models.Model):
+    # TODO: Add enum about raport type
+    date_time_from = models.DateTimeField()
+    date_time_to = models.DateTimeField(null=True, blank=True)
+    device = models.ForeignKey(
+        EnergyStorage, null=True, on_delete=models.CASCADE, related_name="storage_charging_and_usage_raports"
+    )
+    energy_receiver = models.ForeignKey(
+        EnergyReceiver, null=True, on_delete=models.CASCADE, related_name="storage_usage_devices_raports_v2"
+    )
+
+    # Czy to jest potrzebne?
+    # class Meta:
+    #     unique_together = ('device', 'turned_on',)
+
+
+    def __str__(self):
+        return f"Storage charging and usage raport: {str(self.id)} | device: {self.device.name}"
+
+class ChargeStateRaport(models.Model):
+    date = models.DateTimeField()
+    device = models.ForeignKey(
+        EnergyStorage, null=True, on_delete=models.CASCADE, related_name="charge_state_raports"
+    )
+    charge_value = models.FloatField() 
+
+    # Czy to jest potrzebne?
+    # class Meta:
+    #     unique_together = ('device', 'turned_on',)
+
+
+    def __str__(self):
+        return f"Charge state raport: {str(self.id)} | device: {self.device.name}"

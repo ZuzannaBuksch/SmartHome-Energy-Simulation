@@ -8,8 +8,10 @@ from django.forms.models import model_to_dict
 from elasticsearch import Elasticsearch
 from elasticsearch_dsl import Search
 
-from .documents import DeviceRaportDocument, WeatherDocument
-from .models import Device, DeviceRaport, EnergyGenerator, EnergyReceiver
+from .documents import (ChargeStateDocument, DeviceRaportDocument,
+                        StorageChargingAndUsageDocument, WeatherDocument)
+from .models import (Device, DeviceRaport, EnergyGenerator, EnergyReceiver,
+                     StorageChargingAndUsageRaport, ChargeStateRaport)
 
 client = Elasticsearch()
 
@@ -26,6 +28,18 @@ class DeviceCalculateManager():
 
 class EnergyCalculator(ABC):
     """Abstract class that provides interface with methods for concrete energy calculators"""
+
+    def _filter_storage_raports_by_device_and_date(self, device: Device, start_date: datetime=None) -> Search:
+        raports = StorageChargingAndUsageDocument.search().query('match', device__id=device.id)
+        if start_date:
+            raports = raports.filter("range", turned_on={"gte": start_date})
+        return raports
+
+    def _filter_charge_state_raports_by_device_and_date(self, device: Device, start_date: datetime=None) -> Search:
+        raports = ChargeStateDocument.search().query('match', device__id=device.id)
+        if start_date:
+            raports = raports.filter("range", turned_on={"gte": start_date})
+        return raports
     
     def _filter_raports_by_device_and_date(self, device: Device, start_date: datetime=None) -> Search:
         raports = DeviceRaportDocument.search().query('match', device__id=device.id)
@@ -64,7 +78,7 @@ class EnergyReceiverCalculator(EnergyCalculator):
         sum_of_hours = 0.0
         for raport in device_raports:
             if raport.turned_off is None:
-                turned_off = datetime.now
+                turned_off = datetime.now()
             else:
                 turned_off = raport.turned_off
             diff_in_hours = self._calculate_difference_in_time(raport.turned_on, turned_off)
@@ -120,7 +134,7 @@ class EnergyGeneratorCalculator(EnergyCalculator):
             #we need time intervals with a specific solar radiation intensity value, e.g.:
             #01.01.2022 16:00:00 - 01.01.2022 18:00:00 was the value of x, otherwise we cannot calculate it
             if raport.datetime_to is None:
-                datetime_to = datetime.now
+                datetime_to = datetime.now()
             else:
                 datetime_to = raport.datetime_to
             diff_in_hours = self._calculate_difference_in_time(raport.datetime_from, datetime_to)
@@ -133,15 +147,42 @@ class EnergyGeneratorCalculator(EnergyCalculator):
 class EnergyStorageCalculator(EnergyCalculator):
     """Energy calculating class for energy storing devices"""
 
-    def _calculate_energy_data(self, device: Device, device_raports: Search) -> Dict[str, float]:
-        """Calculate energy stored by the device in a given time.
+    def get_device_energy_calculation(self, device: Device, start_date: datetime=None) -> dict:
+        storage_raports = self._filter_storage_raports_by_device_and_date(device, start_date)
+        charge_state_raports = self._filter_charge_state_raports_by_device_and_date(device, start_date)
+        return {
+            **model_to_dict(device),
+            **self._calculate_energy_data(device, storage_raports, charge_state_raports),
+        }
 
-        Arguments:
-        device -- instance of a device for calculating energy storage for
-        device_raports -- device power raports filtered by elasticsearch 
-        """
-        for raport in device_raports:
-            print(raport.device, raport.turned_on, device.device_power)
+    def _calculate_energy_data(self, device: Device, storage_charging_and_usage_raport: Search, charge_state_raports: Search) -> Dict[str, float]:
 
-        energy_stored = "not_calculated_yet"
-        return {"energy_stored": energy_stored}
+        # we are interested the last charge state
+        last_index = charge_state_raports.count() -1
+        last_charge_state = charge_state_raports.execute()[last_index].charge_value #kwh
+        charging_current = 0.1 * device.capacity #assumption, charging current always equals 10% capacity of storage [A]
+        actual_charge_state = last_charge_state
+        for raport in storage_charging_and_usage_raport:
+
+            if not raport.date_time_to:
+                datetime_to = datetime.now()
+            else:
+                datetime_to = raport.date_time_to
+
+            diff_in_hours = self._calculate_difference_in_time(raport.date_time_from, datetime_to)
+
+            if not raport.energy_receiver:
+                print('charging')
+                additional_capacity = (charging_current * device.battery_voltage * diff_in_hours) / 1000 #[kWh]
+
+                if actual_charge_state + additional_capacity <= device.capacity: #important thing! imo this condition should be at all time controlled by energy management system
+                    actual_charge_state += additional_capacity
+                else:
+                    raise ValueError('Accumulated energy cannot be greater than storage capacity')
+
+            else:
+                print('usage')
+
+        #how to create real raport in the database?
+
+        return {"energy_stored": actual_charge_state}

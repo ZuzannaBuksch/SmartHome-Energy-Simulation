@@ -90,4 +90,8 @@ class PopulateDatabaseSerializer(serializers.Serializer):
     data = serializers.CharField()
 
 
+class BuildingEnergySerializer(serializers.Serializer):
+    start_date = serializers.DateTimeField(format="%Y-%m-%d %H:%M:%S", input_formats=['%Y-%m-%d %H:%M:%S'])
+    end_date = serializers.DateTimeField(format="%Y-%m-%d %H:%M:%S", input_formats=['%Y-%m-%d %H:%M:%S'], required=False)
+
 

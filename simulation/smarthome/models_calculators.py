@@ -92,7 +92,7 @@ class EnergyGeneratorCalculator(EnergyCalculator):
 
     #-------------------------calculations only for PV's----------------------------------
     #     # raports = WeatherDocument.filter("range", turned_on={"gte": start_date}) what if there will be a start date in reports, e.g.:
-    # ... 16:05:00, 16:04:30, 16:05:30 ... and we are interested in e.g. "start_date" = 16:04.51 btw. troche nie rozumiem tego filtrowania - spytać Pauliny jak to działa, parametry range etc.
+    # ... 16:05:00, 16:04:30, 16:05:30 ... and we are interested in e.g. "start_date" = 16:04.51 
 
     min_solar_radiation = 0 #W/m^2
     max_solar_radiation = 1000 #W/m^2
@@ -124,15 +124,8 @@ class EnergyGeneratorCalculator(EnergyCalculator):
         device -- instance of a device for calculating energy generation for
         device_raports -- device power raports filtered by elasticsearch 
         """
-        # for photovoltaics searching in device raports about time intervals it's not neccesary because pv is always work (acumulators not)
-        # maybe we should divide generators for two cases: acumulators and PV's or implement logic for generate energy by acu in EnergyStorageCalculator
-        
-        # in our code each device has room and state - this convention imo is wrong (PV is not placed in the room, and is always ON)
-       
         sum_of_energy_in_kwh = 0.0
         for raport in weather_raports:
-            #we need time intervals with a specific solar radiation intensity value, e.g.:
-            #01.01.2022 16:00:00 - 01.01.2022 18:00:00 was the value of x, otherwise we cannot calculate it
             if raport.datetime_to is None:
                 datetime_to = datetime.now()
             else:
@@ -147,6 +140,9 @@ class EnergyGeneratorCalculator(EnergyCalculator):
 class EnergyStorageCalculator(EnergyCalculator):
     """Energy calculating class for energy storing devices"""
 
+    charging_current_factor = 0.1
+    charging_loss_factor = 0.05
+
     def get_device_energy_calculation(self, device: Device, start_date: datetime=None) -> dict:
         storage_raports = self._filter_storage_raports_by_device_and_date(device, start_date)
         charge_state_raports = self._filter_charge_state_raports_by_device_and_date(device, start_date)
@@ -157,13 +153,12 @@ class EnergyStorageCalculator(EnergyCalculator):
 
     def _calculate_energy_data(self, device: Device, storage_charging_and_usage_raport: Search, charge_state_raports: Search) -> Dict[str, float]:
 
-        # we are interested the last charge state
-        last_index = charge_state_raports.count() -1
+        last_index = charge_state_raports.count() -1  # we are interested the last charge state
         last_charge_state = charge_state_raports.execute()[last_index].charge_value #kwh
-        charging_current = 0.1 * device.capacity #assumption, charging current always equals 10% capacity of storage [A]
+        charging_current = self.charging_current_factor * device.capacity #assumption, charging current always equals 10% capacity of storage [A]
         actual_charge_state = last_charge_state
-        for raport in storage_charging_and_usage_raport:
 
+        for raport in storage_charging_and_usage_raport:
             if not raport.date_time_to:
                 datetime_to = datetime.now()
             else:
@@ -182,7 +177,18 @@ class EnergyStorageCalculator(EnergyCalculator):
 
             else:
                 print('usage')
+                # receiver_power = raport.energy_receiver.device_power
+                # capacity_loss = receiver_power * diff_in_hours
+                # if actual_charge_state - capacity_loss >= device.capacity:
+                #     actual_charge_state -= capacity_loss
+                # else:
+                #     raise ValueError('Accumulated energy cannot be less than storage capacity')
+
+                #in energy management system should be system of control max out current e.g. 
+                #sum of out current to supply receivers shouldn't be more than 5* capacity of storage
+                #jak rozkminic sytuacje, gdy wiele urzadzen pobiera prad z generatora? trzeba gdzies dac zabezpieczenie ze nie moze byc
+                #za duze obciazenie akumulatora plus gdzie bedzie sprawdzane czy akumulator ma w ogole tyle zgromadzonej energii
 
         #how to create real raport in the database?
-
+        actual_charge_state = actual_charge_state - self.charging_loss_factor * actual_charge_state
         return {"energy_stored": actual_charge_state}

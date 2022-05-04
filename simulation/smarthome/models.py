@@ -103,44 +103,14 @@ class WeatherRaport(models.Model):
 
     def __str__(self):
         return f"Weather raport: {str(self.id)}"
-
-# --------------do usuniecia--------------
-# zastąpione jednym raportem - StorageChargingAndUsageRaport
-class StorageChargingRaport(models.Model):
-    turned_on = models.DateTimeField()
-    turned_off = models.DateTimeField(null=True, blank=True)
-    device = models.ForeignKey(
-        EnergyStorage, null=True, on_delete=models.CASCADE, related_name="device_charging_raports"
-    )
-    battery_charge = models.FloatField() 
-    class Meta:
-        unique_together = ('device', 'turned_on',)
-
-
-    def __str__(self):
-        return f"Device raport: {str(self.id)} | device: {self.device.name}"
-
-class StorageUsageRaport(models.Model):
-    turned_on = models.DateTimeField()
-    turned_off = models.DateTimeField(null=True, blank=True)
-    device = models.ForeignKey(
-        EnergyStorage, null=True, on_delete=models.CASCADE, related_name="storage_usage_raports"
-    )
-    battery_charge = models.FloatField() 
-    energy_receiver = models.ForeignKey(
-        EnergyReceiver, null=True, on_delete=models.CASCADE, related_name="storage_usage_devices_raports"
-    )
-
-    class Meta:
-        unique_together = ('device', 'turned_on',)
-
-
-    def __str__(self):
-        return f"Device raport: {str(self.id)} | device: {self.device.name}"
-
-# --------------------------------------------
 class StorageChargingAndUsageRaport(models.Model):
-    # TODO: Add enum about raport type
+    CHARGING = "CH"
+    USAGE = "US"
+    job_types = [
+        (CHARGING, "charging"),
+        (USAGE, "usage"),
+    ]
+    job_type = models.CharField(max_length=2, choices=job_types)
     date_time_from = models.DateTimeField()
     date_time_to = models.DateTimeField(null=True, blank=True)
     device = models.ForeignKey(
@@ -150,9 +120,8 @@ class StorageChargingAndUsageRaport(models.Model):
         EnergyReceiver, null=True, on_delete=models.CASCADE, related_name="storage_usage_devices_raports_v2"
     )
 
-    # Czy to jest potrzebne?
-    # class Meta:
-    #     unique_together = ('device', 'turned_on',)
+    class Meta:
+        unique_together = ('device', 'date_time_from',)
 
 
     def __str__(self):

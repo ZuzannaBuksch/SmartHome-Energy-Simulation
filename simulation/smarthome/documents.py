@@ -107,10 +107,6 @@ class ChargeStateDocument(Document):
             'charge_value',
         ]
     
-    def get_queryset(self):
-        return super(DeviceRaportDocument, self).get_queryset().select_related(
-            'device'
-        )
 
     def get_instances_from_related(self, related_instance):
         if isinstance(related_instance, Device):

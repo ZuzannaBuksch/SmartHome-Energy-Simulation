@@ -8,6 +8,8 @@ services:
       - .:/code/elasticsearch
     ports:
       - ${ELASTIC_PORT}:${ELASTIC_PORT}
+    depends_on:
+      - postgres
       
   postgres:
     image: postgres:12

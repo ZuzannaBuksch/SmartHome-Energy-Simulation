@@ -7,6 +7,8 @@ from xmlrpc.client import DateTime
 from django.forms.models import model_to_dict
 from elasticsearch import Elasticsearch
 from elasticsearch_dsl import Search
+from elasticsearch_dsl.query import Q
+from copy import deepcopy
 
 from .documents import (ChargeStateDocument, DeviceRaportDocument,
                         StorageChargingAndUsageDocument, WeatherDocument)
@@ -32,19 +34,44 @@ class EnergyCalculator(ABC):
     def _filter_storage_raports_by_device_and_date(self, device: Device, start_date: datetime=None) -> Search:
         raports = StorageChargingAndUsageDocument.search().query('match', device__id=device.id)
         if start_date:
-            raports = raports.filter("range", turned_on={"gte": start_date})
+            raports = raports.filter("range", date_time_from={"gte": start_date})
         return raports
 
     def _filter_charge_state_raports_by_device_and_date(self, device: Device, start_date: datetime=None) -> Search:
         raports = ChargeStateDocument.search().query('match', device__id=device.id)
         if start_date:
-            raports = raports.filter("range", turned_on={"gte": start_date})
+            raports = raports.filter("range", date={"gte": start_date})
+        
         return raports
     
-    def _filter_raports_by_device_and_date(self, device: Device, start_date: datetime=None) -> Search:
+    def _fill_empty_turned_off_with_datetime(self, raports: Search, dt: datetime):
+        completed_raports = deepcopy(raports)
+        for raport in completed_raports:
+            if not raport.turned_off:
+                raport.turned_off = dt
+        return completed_raports
+        
+
+    def _filter_raports_by_device_and_date(self, device: Device, start_date: datetime, end_date: datetime = None) -> Search:
+        if not end_date:
+            end_date = datetime.now()
+       
         raports = DeviceRaportDocument.search().query('match', device__id=device.id)
-        if start_date:
-            raports = raports.filter("range", turned_on={"gte": start_date})
+        raports = self._fill_empty_turned_off_with_datetime(raports, end_date)
+        raports = set(raports.filter(
+            Q(
+                Q("range", turned_on={"gte": start_date}) &  #turned on after the start_date
+                Q("range", turned_on={"lte": end_date})     # AND turned on before the end date
+            ) |     #OR
+            Q(
+                Q("range", turned_off={"gte": start_date}) &    #turned off after the start date
+                Q("range", turned_off={"lte": end_date})        # AND turned off before the start date
+            )
+        ))
+        
+        for raport in raports:
+            raport.turned_off = end_date if raport.turned_off > end_date else raport.turned_off
+            raport.turned_on = start_date if raport.turned_on < start_date else raport.turned_on
         return raports
     
     def _filter_weather_raports_by_date(self, start_date: datetime=None) -> Search:
@@ -77,11 +104,7 @@ class EnergyReceiverCalculator(EnergyCalculator):
         """
         sum_of_hours = 0.0
         for raport in device_raports:
-            if raport.turned_off is None:
-                turned_off = datetime.now()
-            else:
-                turned_off = raport.turned_off
-            diff_in_hours = self._calculate_difference_in_time(raport.turned_on, turned_off)
+            diff_in_hours = self._calculate_difference_in_time(raport.turned_on, raport.turned_off)
             sum_of_hours += diff_in_hours
 
         kwh_factor = device.device_power / 1000 * sum_of_hours #think about rounding this factor 
@@ -152,9 +175,8 @@ class EnergyStorageCalculator(EnergyCalculator):
         }
 
     def _calculate_energy_data(self, device: Device, storage_charging_and_usage_raport: Search, charge_state_raports: Search) -> Dict[str, float]:
-
-        last_index = charge_state_raports.count() -1  # we are interested the last charge state
-        last_charge_state = charge_state_raports.execute()[last_index].charge_value #kwh
+        charge_state_raports = charge_state_raports.sort({"date" : {"order" : "asc"}})
+        last_charge_state = charge_state_raports.execute()[-1].charge_value #kwh
         charging_current = self.charging_current_factor * device.capacity #assumption, charging current always equals 10% capacity of storage [A]
         actual_charge_state = last_charge_state
 

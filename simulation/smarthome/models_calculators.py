@@ -175,6 +175,7 @@ class EnergyStorageCalculator(EnergyCalculator):
         }
 
     def _calculate_energy_data(self, device: Device, storage_charging_and_usage_raport: Search, charge_state_raports: Search) -> Dict[str, float]:
+       #----------------------REMEMBER ABOUT ROUNDING!!!!!!!!!!!!!!!!!!-----------------------
         charge_state_raports = charge_state_raports.sort({"date" : {"order" : "asc"}})
         last_charge_state = charge_state_raports.execute()[-1].charge_value #kwh
         charging_current = self.charging_current_factor * device.capacity #assumption, charging current always equals 10% capacity of storage [A]
@@ -188,7 +189,7 @@ class EnergyStorageCalculator(EnergyCalculator):
 
             diff_in_hours = self._calculate_difference_in_time(raport.date_time_from, datetime_to)
 
-            if not raport.energy_receiver:
+            if raport.job_type == 'CH':
                 print('charging')
                 additional_capacity = (charging_current * device.battery_voltage * diff_in_hours) / 1000 #[kWh]
 
@@ -197,14 +198,14 @@ class EnergyStorageCalculator(EnergyCalculator):
                 else:
                     raise ValueError('Accumulated energy cannot be greater than storage capacity')
 
-            else:
+            elif raport.job_type == 'US':
                 print('usage')
-                # receiver_power = raport.energy_receiver.device_power
-                # capacity_loss = receiver_power * diff_in_hours
-                # if actual_charge_state - capacity_loss >= device.capacity:
-                #     actual_charge_state -= capacity_loss
-                # else:
-                #     raise ValueError('Accumulated energy cannot be less than storage capacity')
+                receiver_power = raport.energy_receiver.device_power
+                capacity_loss = (receiver_power * diff_in_hours) / 1000
+                if actual_charge_state - capacity_loss <= device.capacity:
+                    actual_charge_state -= capacity_loss
+                else:
+                    raise ValueError('Accumulated energy cannot be less than storage capacity')
 
                 #in energy management system should be system of control max out current e.g. 
                 #sum of out current to supply receivers shouldn't be more than 5* capacity of storage
@@ -212,5 +213,5 @@ class EnergyStorageCalculator(EnergyCalculator):
                 #za duze obciazenie akumulatora plus gdzie bedzie sprawdzane czy akumulator ma w ogole tyle zgromadzonej energii
 
         #how to create real raport in the database?
-        actual_charge_state = actual_charge_state - self.charging_loss_factor * actual_charge_state
+        actual_charge_state = actual_charge_state * (1- self.charging_loss_factor)
         return {"energy_stored": actual_charge_state}

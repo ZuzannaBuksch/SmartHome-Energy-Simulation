@@ -59,12 +59,14 @@ class WeatherDocument(Document):
 class StorageChargingAndUsageDocument(Document):
     device = fields.ObjectField(properties={
             'name' : fields.TextField(),
-            'id' : fields.IntegerField(attr='id'),
+            'id' : fields.IntegerField(attr='id')
     })
 
     energy_receiver = fields.ObjectField(properties={
             'name' : fields.TextField(),
             'id' : fields.IntegerField(attr='id'),
+            'device_power' : fields.FloatField()
+            
     })
 
     class Index:
@@ -77,6 +79,7 @@ class StorageChargingAndUsageDocument(Document):
         fields = [
             'date_time_from',
             'date_time_to',
+            'job_type',
         ]
     
     def get_queryset(self):

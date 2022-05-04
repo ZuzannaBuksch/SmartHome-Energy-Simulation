@@ -104,8 +104,8 @@ class WeatherRaport(models.Model):
     def __str__(self):
         return f"Weather raport: {str(self.id)}"
 class StorageChargingAndUsageRaport(models.Model):
-    CHARGING = "CH"
-    USAGE = "US"
+    CHARGING = 'CH'
+    USAGE = 'US'
     job_types = [
         (CHARGING, "charging"),
         (USAGE, "usage"),

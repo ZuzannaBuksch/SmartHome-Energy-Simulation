@@ -165,7 +165,7 @@ class EnergyTestCase(TestCase):
         ChargeStateRaport.objects.create(device = device, charge_value = 2.0, date = datetime_3)
 
         EnergyReceiver.objects.create(building=building, name="bulb3", state=False, device_power=70, supply_voltage=8)
-        StorageChargingAndUsageRaport.objects.create(date_time_from = datetime_3, date_time_to = datetime_4, device = device)
+        StorageChargingAndUsageRaport.objects.create(date_time_from = datetime_3, date_time_to = datetime_4, device = device, job_type = 'CH')
         
         with patch.object(BuildingEnergyView, 'get_object', return_value=building):
             url = reverse_lazy('smarthome:energy', kwargs={'pk': 0}) #pk can by anything, the building is already mocked
@@ -173,4 +173,31 @@ class EnergyTestCase(TestCase):
             building_devices = response.data.get("building_devices", [])
             energy_stored = round(building_devices[0].get("energy_stored"), 6)
             self.assertEqual(energy_stored, 4.48 * 0.95)
+    
+    def test_calculate_stored_energy_usage(self):
+        """Energy stored is calculated correctly"""
+        db = self.setUpEnergyStorageCharging()
+        building = db["building"]
+        device = db["devices"][0]
+
+        start_date = '2022-01-29 08:00:00'
+
+        datetime_1 = self.get_date_from_string("2022-03-30 10:30:00")
+        datetime_2 = self.get_date_from_string("2022-03-30 11:30:00")
+        datetime_3 = self.get_date_from_string("2022-03-30 11:00:00")
+        datetime_4 = self.get_date_from_string("2022-03-30 12:00:00")
+
+        ChargeStateRaport.objects.create(device = device, charge_value = 0.0, date = datetime_1)
+        ChargeStateRaport.objects.create(device = device, charge_value = 4.0, date = datetime_2)
+        ChargeStateRaport.objects.create(device = device, charge_value = 2.0, date = datetime_3)
+
+        receiver = EnergyReceiver.objects.create(building=building, name="bulb3", state=False, device_power=70, supply_voltage=8)
+        StorageChargingAndUsageRaport.objects.create(date_time_from = datetime_3, date_time_to = datetime_4, device = device, energy_receiver = receiver, job_type = 'US')
+        
+        with patch.object(BuildingEnergyView, 'get_object', return_value=building):
+            url = reverse_lazy('smarthome:energy', kwargs={'pk': 0}) #pk can by anything, the building is already mocked
+            response = self.client.get(url, data={"start_date": start_date})
+            building_devices = response.data.get("building_devices", [])
+            energy_stored = round(building_devices[0].get("energy_stored"), 6)
+            self.assertEqual(energy_stored, round(3.93 * 0.95, 6))
 

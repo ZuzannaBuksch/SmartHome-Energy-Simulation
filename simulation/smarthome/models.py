@@ -62,7 +62,8 @@ class EnergyStorage(Device):
     
     def __str__(self):
         return f"Energy storing device: {str(self.id)} | name: {self.name}"
-    
+
+    # TODO: Override save method -> add ChargeStateRaport
     #'NoneType' object has no attribute 'name'
     # def save(self, *args, **kwargs):
     #     device = super(EnergyStorage, self).save(*args, **kwargs)

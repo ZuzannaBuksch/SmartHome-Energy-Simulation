@@ -1,13 +1,16 @@
-from mock import patch
 from datetime import datetime
-from django.urls import reverse_lazy
+
 from django.test import TestCase
+from django.urls import reverse_lazy
+from mock import patch
 from rest_framework.test import APIClient
 from users.models import User
 
-from .models import Building, DeviceRaport, EnergyGenerator, EnergyReceiver, WeatherRaport, EnergyStorage, ChargeStateRaport, StorageChargingAndUsageRaport
-
+from .models import (Building, ChargeStateRaport, DeviceRaport,
+                     EnergyGenerator, EnergyReceiver, EnergyStorage,
+                     StorageChargingAndUsageRaport, WeatherRaport)
 from .views import BuildingEnergyView
+
 
 class EnergyTestCase(TestCase):
     client = APIClient()
@@ -28,7 +31,7 @@ class EnergyTestCase(TestCase):
 
 
     def test_calculate_single_HRD_consumption_right(self):
-        """Energy consumped by single device is calculated correctly"""
+        """Energy consumed by single device is calculated correctly"""
 
         db = self.setUpSingleHRD()
         building = db["building"]
@@ -45,6 +48,107 @@ class EnergyTestCase(TestCase):
             self.assertEqual(len(building_devices), 1)
             self.assertEqual(energy, 1.44) #(60 W / 1000) * 24 h
 
+
+    def setUpSingleHRManyDForDatesTests(self):
+        """Single HR - House, Room; Many Devices"""
+        
+        user = User.objects.create(email="defaultuser@email.com", password="defaultpassword")
+        building = Building.objects.create(user=user, name="house3")
+        device_1 = EnergyReceiver.objects.create(building=building, name="bulb1", state=False, device_power=60, supply_voltage=8)
+        device_2 = EnergyReceiver.objects.create(building=building, name="bulb2", state=False, device_power=60, supply_voltage=8)
+        return {
+            "building": building,
+            "devices": [device_1, device_2]
+        }
+
+    def test_calculate_single_HRD_consumption_without_turned_off_date(self):
+        db = self.setUpSingleHRManyDForDatesTests()
+        building = db["building"]
+        device = db["devices"][0]
+        
+        hour_07 = self.get_date_from_string("2022-03-30 07:00:00")
+        hour_08 = self.get_date_from_string("2022-03-30 08:00:00")
+        hour_09 = self.get_date_from_string("2022-03-30 09:00:00")
+        hour_09_30 = self.get_date_from_string("2022-03-30 09:30:00")
+        hour_10 = self.get_date_from_string("2022-03-30 10:00:00")
+        hour_11 = self.get_date_from_string("2022-03-30 11:00:00")
+        hour_12 = self.get_date_from_string("2022-03-30 12:00:00")
+        hour_12_30 = self.get_date_from_string("2022-03-30 12:30:00")
+        hour_15_45 = self.get_date_from_string("2022-03-30 15:45:00")
+
+        DeviceRaport.objects.create(device=device, turned_on=hour_09, turned_off=hour_10)
+        DeviceRaport.objects.create(device=device, turned_on=hour_11)
+        
+        with patch.object(BuildingEnergyView, 'get_object', return_value=building):
+            url = reverse_lazy('smarthome:energy', kwargs={'pk': 0}) #pk can by anything, the building is already mocked
+
+            #---|start_date 10:30|---|ON 11:00|---|end_date 12:00|---|OFF None|
+            response = self.client.get(url, data={"start_date": hour_10, "end_date": hour_12})
+            building_devices = response.data.get("building_devices", [])
+            energy = building_devices[0].get("energy_consumed")
+            self.assertEqual(energy, 0.06) #(60 W / 1000) * 1 h
+
+            #---|ON 11:00|---|start_date 12:30|---|end_date 12:30|---|OFF None|
+            response = self.client.get(url, data={"start_date": hour_12_30, "end_date": hour_15_45})
+            building_devices = response.data.get("building_devices", [])
+            energy = building_devices[0].get("energy_consumed")
+            self.assertEqual(energy, 0.195) #(60 W / 1000) * 3.25 h
+
+            #---|start_date 07:00|---|end_date 08:00|---|ON 09:00|-----
+            response = self.client.get(url, data={"start_date": hour_07, "end_date": hour_08})
+            building_devices = response.data.get("building_devices", [])
+            energy = building_devices[0].get("energy_consumed")
+            self.assertEqual(energy, 0.0) #(60 W / 1000) * 0 h
+
+            #---|start_date 07:00|---|ON 09:00|---|OFF 10:00|---|end_date 11:00|---|ON 11:00|
+            response = self.client.get(url, data={"start_date": hour_07, "end_date": hour_11})
+            building_devices = response.data.get("building_devices", [])
+            energy = building_devices[0].get("energy_consumed")
+            self.assertEqual(energy, 0.06) #(60 W / 1000) * 1 h
+
+            #---|ON 09:00|---|start_date 09:30|---|OFF 10:00|---|ON 11:00|---|end_date 15:45|
+            response = self.client.get(url, data={"start_date": hour_09_30, "end_date": hour_15_45})
+            building_devices = response.data.get("building_devices", [])
+            energy = building_devices[0].get("energy_consumed")
+            self.assertEqual(energy, 0.315) #(60 W / 1000) * 5.25 h
+
+    def test_dates_filtering(self):
+        db = self.setUpSingleHRManyDForDatesTests()
+        building = db["building"]
+        device = db["devices"][1]
+        
+        hour_07 = self.get_date_from_string("2022-03-30 07:00:00")
+        hour_08 = self.get_date_from_string("2022-03-30 08:00:00")
+        hour_09_30 = self.get_date_from_string("2022-03-30 09:30:00")
+        hour_11 = self.get_date_from_string("2022-03-30 11:00:00")
+        hour_12_30 = self.get_date_from_string("2022-03-30 12:30:00")
+        hour_15_45 = self.get_date_from_string("2022-03-30 15:45:00")
+
+        DeviceRaport.objects.create(device=device, turned_on=hour_07, turned_off=hour_15_45)
+        
+        with patch.object(BuildingEnergyView, 'get_object', return_value=building):
+            url = reverse_lazy('smarthome:energy', kwargs={'pk': 0}) #pk can by anything, the building is already mocked
+
+            response = self.client.get(url, data={"start_date": hour_08, "end_date": hour_12_30})
+            building_devices = response.data.get("building_devices", [])
+            energy = building_devices[1].get("energy_consumed")
+            self.assertEqual(energy, 0.27) #(60 W / 1000) * 4.5 h
+
+            response = self.client.get(url, data={"start_date": hour_08, "end_date": hour_09_30})
+            building_devices = response.data.get("building_devices", [])
+            energy1 = building_devices[1].get("energy_consumed")
+
+            response = self.client.get(url, data={"start_date": hour_09_30, "end_date": hour_11})
+            building_devices = response.data.get("building_devices", [])
+            energy2 = building_devices[1].get("energy_consumed")
+
+            response = self.client.get(url, data={"start_date": hour_11, "end_date": hour_12_30})
+            building_devices = response.data.get("building_devices", [])
+            energy3 = building_devices[1].get("energy_consumed")
+
+            total_energy = energy1+energy2+ energy3
+  
+            self.assertEqual(total_energy, energy) 
 
     def setUpSingleHRManyD(self):
         """Single HR - House, Room; Many Devices"""
@@ -138,10 +242,11 @@ class EnergyTestCase(TestCase):
 
         self.assertEqual(energy_generated, 0.514667) # 0.123825 + 0.26035 + 0.073025 + 0.0574675 = 0.5146675
 
+
     def setUpEnergyStorageCharging(self):
         user = User.objects.create(email="user@email.com", password="defaultpassword")
         building = Building.objects.create(user=user, name="house")
-        energy_storage = EnergyStorage.objects.create(name='storage1', building=building, capacity = 200 , battery_voltage = 24) #4800 Wh -> 4.8 kWh
+        energy_storage = EnergyStorage.objects.create(name='storage1', building=building, capacity = 200, battery_voltage = 24) #4800 Wh -> 4.8 kWh
         return {
             "building": building,
             "devices": [energy_storage]
@@ -200,4 +305,33 @@ class EnergyTestCase(TestCase):
             building_devices = response.data.get("building_devices", [])
             energy_stored = round(building_devices[0].get("energy_stored"), 6)
             self.assertEqual(energy_stored, round(3.93 * 0.95, 6))
+
+    def test_calculate_stored_energy_usage_and_charging(self):
+        """Energy stored is calculated correctly"""
+        db = self.setUpEnergyStorageCharging()
+        building = db["building"]
+        device = db["devices"][0]
+
+        datetime_1 = self.get_date_from_string("2022-03-30 10:30:00")
+        datetime_2 = self.get_date_from_string("2022-03-30 11:15:00") # diff = 0.75
+        datetime_3 = self.get_date_from_string("2022-03-30 11:30:00") # diff = 0.25
+        datetime_4 = self.get_date_from_string("2022-03-30 12:00:00") # diff = 0.5
+        datetime_5 = self.get_date_from_string("2022-03-30 15:45:00") # diff = 3.75
+        datetime_6 = self.get_date_from_string("2022-03-30 19:00:00") # diff = 3.25
+
+        ChargeStateRaport.objects.create(device = device, charge_value = 50.0, date = datetime_1)
+        receiver = EnergyReceiver.objects.create(building=building, name="bulb1", state=False, device_power=40, supply_voltage=8)
+        receiver2 =EnergyReceiver.objects.create(building=building, name="bulb2", state=False, device_power=50, supply_voltage=8)
+
+        StorageChargingAndUsageRaport.objects.create(date_time_from = datetime_1, date_time_to = datetime_4, device = device, energy_receiver = receiver, job_type = 'US')
+        StorageChargingAndUsageRaport.objects.create(date_time_from = datetime_2, date_time_to = datetime_5, device = device, energy_receiver = receiver2, job_type = 'US')
+        
+        StorageChargingAndUsageRaport.objects.create(date_time_from = datetime_5, date_time_to = datetime_6, device = device, job_type = 'CH')
+
+        with patch.object(BuildingEnergyView, 'get_object', return_value=building):
+            url = reverse_lazy('smarthome:energy', kwargs={'pk': 0}) #pk can by anything, the building is already mocked
+            response = self.client.get(url, data={"start_date": '2022-01-29 08:00:00'})
+            building_devices = response.data.get("building_devices", [])
+            energy_stored = round(building_devices[0].get("energy_stored"), 6)
+            self.assertEqual(energy_stored, round(51.275 * 0.95 , 6))
 

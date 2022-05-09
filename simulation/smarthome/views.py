@@ -2,7 +2,7 @@ import json
 from datetime import datetime
 
 from django.forms.models import model_to_dict
-from rest_framework import generics, mixins, viewsets, status
+from rest_framework import generics, mixins, status, viewsets
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from users.models import User
@@ -10,9 +10,10 @@ from users.models import User
 from .models import (Building, Device, DeviceRaport, EnergyGenerator,
                      EnergyReceiver, EnergyStorage, Room)
 from .models_calculators import DeviceCalculateManager
-from .serializers import (BuildingListSerializer, BuildingSerializer,
-                          DeviceRaportListSerializer, DeviceSerializer,
-                          PopulateDatabaseSerializer, RoomSerializer, BuildingEnergySerializer)
+from .serializers import (BuildingEnergySerializer, BuildingListSerializer,
+                          BuildingSerializer, DeviceRaportListSerializer,
+                          DeviceSerializer, PopulateDatabaseSerializer,
+                          RoomSerializer)
 
 
 class BuildingViewSet(viewsets.ModelViewSet):
@@ -115,9 +116,10 @@ class BuildingEnergyView(mixins.RetrieveModelMixin, generics.GenericAPIView):
         serializer = BuildingEnergySerializer(data=request.query_params)
         if serializer.is_valid():
             start_date = serializer.to_internal_value(serializer.data).get("start_date")
+            end_date = serializer.to_internal_value(serializer.data).get("end_date")
             building_dict["building_devices"] = []
             for device in building.building_devices.all():
-                building_dict["building_devices"].append(DeviceCalculateManager().get_device_energy(device, start_date))
+                building_dict["building_devices"].append(DeviceCalculateManager().get_device_energy(device, start_date, end_date))
             return Response(building_dict)
         else:
            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

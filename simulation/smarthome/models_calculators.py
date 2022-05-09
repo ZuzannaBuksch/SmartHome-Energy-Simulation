@@ -33,18 +33,38 @@ class DeviceCalculateManager():
 class EnergyCalculator(ABC):
     """Abstract class that provides interface with methods for concrete energy calculators"""
 
-    def _filter_storage_raports_by_device_and_date(self, device: Device, start_date: datetime=None) -> Search:
+    def _filter_storage_raports_by_device_and_date(self, device: Device, start_date: datetime=None, end_date: datetime=None) -> Search:
+        if not end_date:
+            end_date = datetime.now()
         raports = StorageChargingAndUsageDocument.search().query('match', device__id=device.id)
-        if start_date:
-            raports = raports.filter("range", date_time_from={"gte": start_date})
-        return raports
+        query_filter = raports.filter(
+                Q("range", date_time_from={"gte": start_date, "lte": end_date}) |
+                Q("range", date_time_to={"gte": start_date, "lte": end_date}) |
+                Q(
+                    Q("range", date_time_from={"lt": start_date}) &
+                    Q("range",  date_time_to = {"gt": end_date})
 
-    def _filter_charge_state_raports_by_device_and_date(self, device: Device, start_date: datetime=None) -> Search:
+                ) |
+                Q(
+                    Q("range", date_time_from={"lt": end_date}) &
+                    ~Q("exists", field='date_time_to')
+                )
+        )
+        response = query_filter.execute()
+        for raport in response:
+            if raport.date_time_to:
+                raport.date_time_to = end_date if raport.date_time_to > end_date else raport.date_time_to
+            else:
+                raport.date_time_to = end_date
+            raport.date_time_from = start_date if raport.date_time_from < start_date else raport.date_time_from
+        return response
+
+    def _filter_charge_state_raports_by_device_and_get_last_charge_state(self, device: Device) -> float:
         raports = ChargeStateDocument.search().query('match', device__id=device.id)
-        if start_date:
-            raports = raports.filter("range", date={"gte": start_date})
-        return raports
-        
+        raports = raports.sort({"date" : {"order" : "asc"}})
+        last_charge_state = raports.execute()[-1].charge_value #kwh
+        return last_charge_state
+
     def _filter_raports_by_device_and_date(self, device: Device, start_date: datetime, end_date: datetime = None) -> Search:
         if not end_date:
             end_date = datetime.now()
@@ -71,11 +91,31 @@ class EnergyCalculator(ABC):
             raport.turned_on = start_date if raport.turned_on < start_date else raport.turned_on
         return response
     
-    def _filter_weather_raports_by_date(self, start_date: datetime=None) -> Search:
+    def _filter_weather_raports_by_date(self, start_date: datetime=None, end_date: datetime = None) -> Search:
+        if not end_date:
+            end_date = datetime.now()
         raports = WeatherDocument.search()
-        if start_date:
-            raports = raports.filter("range", datetime_from={"gte": start_date})
-        return raports
+        query_filter = raports.filter(
+                Q("range", datetime_from={"gte": start_date, "lte": end_date}) |
+                Q("range", datetime_to={"gte": start_date, "lte": end_date}) |
+                Q(
+                    Q("range", datetime_from={"lt": start_date}) &
+                    Q("range",  datetime_to = {"gt": end_date})
+
+                ) |
+                Q(
+                    Q("range", datetime_from={"lt": end_date}) &
+                    ~Q("exists", field='datetime_to')
+                )
+        )
+        response = query_filter.execute()
+        for raport in response:
+            if raport.datetime_to:
+                raport.datetime_to = end_date if raport.datetime_to > end_date else raport.datetime_to
+            else:
+                raport.datetime_to = end_date
+            raport.datetime_from = start_date if raport.datetime_from < start_date else raport.datetime_from
+        return response
 
     def _calculate_difference_in_time(self, turned_on: datetime, turned_off: datetime) -> float:
         diff = turned_off - turned_on
@@ -110,10 +150,6 @@ class EnergyReceiverCalculator(EnergyCalculator):
 class EnergyGeneratorCalculator(EnergyCalculator):
     """Energy calculating class for energy generating devices"""
 
-    #-------------------------calculations only for PV's----------------------------------
-    #     # raports = WeatherDocument.filter("range", turned_on={"gte": start_date}) what if there will be a start date in reports, e.g.:
-    # ... 16:05:00, 16:04:30, 16:05:30 ... and we are interested in e.g. "start_date" = 16:04.51 
-
     min_solar_radiation = 0 #W/m^2
     max_solar_radiation = 1000 #W/m^2
     new_min_range = 0
@@ -121,8 +157,7 @@ class EnergyGeneratorCalculator(EnergyCalculator):
     weather_loss_factor = 0.05
 
     def get_device_energy_calculation(self, device: Device, start_date: datetime=None, end_date: datetime=None) -> dict:
-        # TODO: Add end date to filter weather raports
-        weather_raports = self._filter_weather_raports_by_date(start_date)
+        weather_raports = self._filter_weather_raports_by_date(start_date, end_date)
         return {
             **model_to_dict(device),
             **self._calculate_energy_data(device, weather_raports),
@@ -133,7 +168,7 @@ class EnergyGeneratorCalculator(EnergyCalculator):
         return weight
     
     def _calculate_power_of_photovoltaic(self, solar_radiation_coefficient: float, generator_power: float):
-        output_power = generator_power * (solar_radiation_coefficient + self.weather_loss_factor)
+        output_power = generator_power * solar_radiation_coefficient * (1 - self.weather_loss_factor)
         if output_power > generator_power or output_power < 0.0:
             raise ValueError('Output power cannot be lower or greater than generator power.')
         return output_power
@@ -148,11 +183,7 @@ class EnergyGeneratorCalculator(EnergyCalculator):
         # TODO: Add rounding calculated values
         sum_of_energy_in_kwh = 0.0
         for raport in weather_raports:
-            if raport.datetime_to is None:
-                datetime_to = datetime.now()
-            else:
-                datetime_to = raport.datetime_to
-            diff_in_hours = self._calculate_difference_in_time(raport.datetime_from, datetime_to)
+            diff_in_hours = self._calculate_difference_in_time(raport.datetime_from, raport.datetime_to)
             solar_radiation_coefficient = self._get_weather_coefficient(raport.solar_radiation, self.new_min_range, self.new_max_range)
             output_power = self._calculate_power_of_photovoltaic(solar_radiation_coefficient, device.generation_power)
             output_power_in_kwh = output_power / 1000 * diff_in_hours #think about rounding this factor 
@@ -166,36 +197,26 @@ class EnergyStorageCalculator(EnergyCalculator):
     charging_loss_factor = 0.05
 
     def get_device_energy_calculation(self, device: Device, start_date: datetime=None, end_date: datetime=None) -> dict:
-        # TODO: Add end date to filter storage raports and charge state raports
-        storage_raports = self._filter_storage_raports_by_device_and_date(device, start_date)
-        charge_state_raports = self._filter_charge_state_raports_by_device_and_date(device, start_date)
+        storage_raports = self._filter_storage_raports_by_device_and_date(device, start_date, end_date)
+        last_charge_state = self._filter_charge_state_raports_by_device_and_get_last_charge_state(device)
         return {
             **model_to_dict(device),
-            **self._calculate_energy_data(device, storage_raports, charge_state_raports),
+            **self._calculate_energy_data(device, storage_raports, last_charge_state),
         }
 
-    def _calculate_energy_data(self, device: Device, storage_charging_and_usage_raport: Search, charge_state_raports: Search) -> Dict[str, float]:
+    def _calculate_energy_data(self, device: Device, storage_charging_and_usage_raport: Search, last_charge_state: float) -> Dict[str, float]:
         # TODO: Add rounding calculated values
-        charge_state_raports = charge_state_raports.sort({"date" : {"order" : "asc"}})
-        last_charge_state = charge_state_raports.execute()[-1].charge_value #kwh
         charging_current = self.charging_current_factor * device.capacity #assumption, charging current always equals 10% capacity of storage [A]
-        actual_charge_state = last_charge_state
-        
+        actual_charge_state = last_charge_state  
+      
         for raport in storage_charging_and_usage_raport:
-            if not raport.date_time_to:
-                datetime_to = datetime.now()
-            else:
-                datetime_to = raport.date_time_to
-
-            diff_in_hours = self._calculate_difference_in_time(raport.date_time_from, datetime_to)
-
+            diff_in_hours = self._calculate_difference_in_time(raport.date_time_from, raport.date_time_to)
             if raport.job_type == 'CH':
                 additional_capacity = (charging_current * device.battery_voltage * diff_in_hours) / 1000 #[kWh]
                 if actual_charge_state + additional_capacity <= device.capacity: #important thing! imo this condition should be at all time controlled by energy management system
                     actual_charge_state += additional_capacity
                 else:
                     raise ValueError('Accumulated energy cannot be greater than storage capacity')
-
             elif raport.job_type == 'US':
                 receiver_power = raport.energy_receiver.device_power
                 capacity_loss = (receiver_power * diff_in_hours) / 1000

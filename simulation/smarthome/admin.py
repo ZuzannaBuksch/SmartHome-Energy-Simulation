@@ -1,7 +1,8 @@
 from django.contrib import admin
 
-from .models import (Building, Device, DeviceRaport, EnergyGenerator,
-                     EnergyReceiver, EnergyStorage, Room, WeatherRaport)
+from .models import (Building, ChargeStateRaport, Device, DeviceRaport,
+                     EnergyGenerator, EnergyReceiver, EnergyStorage, Room,
+                     WeatherRaport)
 
 admin.site.register(DeviceRaport)
 admin.site.register(Device)
@@ -11,5 +12,6 @@ admin.site.register(EnergyReceiver)
 admin.site.register(EnergyGenerator)
 admin.site.register(Room)
 admin.site.register(WeatherRaport)
+admin.site.register(ChargeStateRaport)
 
 # Register your models here.

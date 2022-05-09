@@ -59,8 +59,13 @@ class EnergyCalculator(ABC):
             raport.date_time_from = start_date if raport.date_time_from < start_date else raport.date_time_from
         return response
 
-    def _filter_charge_state_raports_by_device_and_get_last_charge_state(self, device: Device) -> float:
+    def _filter_charge_state_raports_by_device_and_get_last_charge_state(self, device: Device, start_date: datetime=None, end_date: datetime=None) -> float:
+        if not end_date:
+            end_date = datetime.now()
         raports = ChargeStateDocument.search().query('match', device__id=device.id)
+        raports = raports.filter(
+                Q("range", date={"lt": end_date})
+        )
         raports = raports.sort({"date" : {"order" : "asc"}})
         last_charge_state = raports.execute()[-1].charge_value #kwh
         return last_charge_state
@@ -198,13 +203,13 @@ class EnergyStorageCalculator(EnergyCalculator):
 
     def get_device_energy_calculation(self, device: Device, start_date: datetime=None, end_date: datetime=None) -> dict:
         storage_raports = self._filter_storage_raports_by_device_and_date(device, start_date, end_date)
-        last_charge_state = self._filter_charge_state_raports_by_device_and_get_last_charge_state(device)
+        last_charge_state = self._filter_charge_state_raports_by_device_and_get_last_charge_state(device, start_date, end_date)
         return {
             **model_to_dict(device),
-            **self._calculate_energy_data(device, storage_raports, last_charge_state),
+            **self._calculate_energy_data(device, storage_raports, last_charge_state, end_date),
         }
 
-    def _calculate_energy_data(self, device: Device, storage_charging_and_usage_raport: Search, last_charge_state: float) -> Dict[str, float]:
+    def _calculate_energy_data(self, device: Device, storage_charging_and_usage_raport: Search, last_charge_state: float, end_date: datetime=None) -> Dict[str, float]:
         # TODO: Add rounding calculated values
         charging_current = self.charging_current_factor * device.capacity #assumption, charging current always equals 10% capacity of storage [A]
         actual_charge_state = last_charge_state  
@@ -230,6 +235,9 @@ class EnergyStorageCalculator(EnergyCalculator):
                 #jak rozkminic sytuacje, gdy wiele urzadzen pobiera prad z generatora? trzeba gdzies dac zabezpieczenie ze nie moze byc
                 #za duze obciazenie akumulatora plus gdzie bedzie sprawdzane czy akumulator ma w ogole tyle zgromadzonej energii
 
-        # TODO: Create ChargeStateRaport
-        actual_charge_state = actual_charge_state * (1- self.charging_loss_factor)
+        if actual_charge_state != last_charge_state:
+            actual_charge_state = actual_charge_state * (1 - self.charging_loss_factor) 
+            if not end_date:
+                end_date = datetime.now()
+            ChargeStateRaport.objects.create(device = device, charge_value = actual_charge_state, date = end_date)
         return {"energy_stored": actual_charge_state}

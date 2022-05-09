@@ -63,23 +63,9 @@ class EnergyStorage(Device):
     def __str__(self):
         return f"Energy storing device: {str(self.id)} | name: {self.name}"
 
-    # TODO: Override save method -> add ChargeStateRaport
-    #'NoneType' object has no attribute 'name'
-    # def save(self, *args, **kwargs):
-    #     device = super(EnergyStorage, self).save(*args, **kwargs)
-    #     raport = ChargeStateRaport(device=device, date=datetime.now(), charge_value = 0)
-    #     raport.save()
-
-# to do wyrzucenia? albo nie? może to jest raport zużycia energii przez urządzenie
-class DevicePowerSupplyRaport(models.Model):
-    connected_from= models.DateTimeField()
-    connected_to = models.DateTimeField(null=True, blank=True)
-    device = models.ForeignKey(
-        Device, null=True, on_delete=models.CASCADE, related_name="device_power_raports"
-    )
-    energy_receiver = models.ForeignKey(
-        EnergyReceiver, null=True, on_delete=models.CASCADE, related_name="receiver_power_raports"
-    )
+    def save(self, *args, **kwargs):
+        super(EnergyStorage, self).save(*args, **kwargs)
+        ChargeStateRaport.objects.create(device = self, charge_value = 0.0, date = datetime.now())
 
 class DeviceRaport(models.Model):
     turned_on = models.DateTimeField()
@@ -134,10 +120,8 @@ class ChargeStateRaport(models.Model):
         EnergyStorage, null=True, on_delete=models.CASCADE, related_name="charge_state_raports"
     )
     charge_value = models.FloatField() 
-
-    # Czy to jest potrzebne?
-    # class Meta:
-    #     unique_together = ('device', 'turned_on',)
+    class Meta:
+        unique_together = ('device', 'date',)
 
 
     def __str__(self):

@@ -10,13 +10,17 @@ services:
       - ${ELASTIC_PORT}:${ELASTIC_PORT}
     depends_on:
       - postgres
-      
+    networks:
+      - sim_appsbridge
+
   postgres:
     image: postgres:12
     env_file: .env
     ports:
     - ${POSTGRES_PORT}:${POSTGRES_PORT}
-    
+    networks:
+      - sim_appsbridge
+
   simulation:
     build:
       context: ./simulation/
@@ -30,3 +34,9 @@ services:
       - ./static:/static
     depends_on:
       - sim-elasticsearch
+    networks:
+      - sim_appsbridge
+networks:
+  sim_appsbridge:
+    external:
+      name: custom_network

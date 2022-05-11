@@ -12,5 +12,6 @@ black>=22.1.0
 elasticsearch-dsl>=6.0, <7.0
 django-elasticsearch-dsl>=6.0,<7.0
 django-polymorphic
+django-rest-polymorphic==0.1.9
 pytest-django
 mock

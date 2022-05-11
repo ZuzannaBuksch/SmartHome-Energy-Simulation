@@ -1,54 +1,40 @@
 from rest_framework import serializers
+from rest_polymorphic.serializers import PolymorphicSerializer
 
 from .models import (Building, Device, DeviceRaport, EnergyGenerator,
                      EnergyReceiver, EnergyStorage, Room)
 
 
 class EnergyGeneratorSerializer(serializers.ModelSerializer):
+    id = serializers.IntegerField()
     class Meta:
         model = EnergyGenerator
-        fields = ('id', 'name', 'state', 'room','efficiency', 'type', 'generation_power')
-        read_only_fields = ('id', 'type',)
+        fields = ('id', 'building', 'name', 'state', 'room','efficiency', 'type', 'generation_power')
 
 
 class EnergyReceiverSerializer(serializers.ModelSerializer):
+    id = serializers.IntegerField()
     class Meta:
         model = EnergyReceiver
-        fields = ('id', 'name', 'state', 'room', 'device_power', 'type', 'supply_voltage')
-        read_only_fields = ('id', 'type',)
+        fields = ('id', 'building', 'name', 'state', 'room', 'device_power', 'type', 'supply_voltage')
 
 
 class EnergyStorageSerializer(serializers.ModelSerializer):
+    id = serializers.IntegerField()
     class Meta:
         model = EnergyStorage
-        fields = ('id', 'name', 'state', 'room', 'capacity', 'battery_charge', 'type', 'battery_voltage')
-        read_only_fields = ('id', 'type',)
+        fields = ('id', 'building', 'name', 'state', 'room', 'capacity', 'battery_charge', 'type', 'battery_voltage')
 
 
-class DeviceSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Device
-        fields = ('id', 'name', 'state', 'room', 'type')
-        read_only_fields = ('id', 'type',)
-
-    def to_internal_value(self, data):
-        """
-        Because Device is Polymorphic
-        """
-        if data.get('type') == "EnergyGenerator":
-            self.Meta.model = EnergyGenerator
-            return EnergyGeneratorSerializer(context=self.context).to_internal_value(data)
-        elif data.get('type') == "EnergyReceiver":
-            self.Meta.model = EnergyReceiver
-            return EnergyReceiverSerializer(context=self.context).to_internal_value(data)
-        elif data.get('type') == "EnergyStorage":
-            self.Meta.model = EnergyStorage
-            return EnergyStorageSerializer(context=self.context).to_internal_value(data)
-
-        self.Meta.model = Device
-        return super(DeviceSerializer, self).to_internal_value(data)
+class DeviceSerializer(PolymorphicSerializer):
+    model_serializer_mapping = {
+            EnergyGenerator: EnergyGeneratorSerializer,
+            EnergyReceiver: EnergyReceiverSerializer,
+            EnergyStorage: EnergyStorageSerializer
+        }
 
 class RoomSerializer(serializers.ModelSerializer):
+    id = serializers.IntegerField()
     room_devices = DeviceSerializer(many=True, read_only=True)
 
     class Meta:
@@ -58,9 +44,10 @@ class RoomSerializer(serializers.ModelSerializer):
 
 
 class BuildingSerializer(serializers.ModelSerializer):
-    user = serializers.HiddenField(
-        default=serializers.CreateOnlyDefault(serializers.CurrentUserDefault())
-    )
+    # user = serializers.HiddenField(
+    #     default=serializers.CreateOnlyDefault(serializers.CurrentUserDefault())
+    # )
+    id = serializers.IntegerField()
     building_rooms = RoomSerializer(many=True, read_only=True)
     building_devices = DeviceSerializer(many=True, read_only=True)
 
@@ -71,6 +58,7 @@ class BuildingSerializer(serializers.ModelSerializer):
 
 
 class BuildingListSerializer(serializers.ModelSerializer):
+    id = serializers.IntegerField()
     class Meta:
         model = Building
         fields = "__all__"

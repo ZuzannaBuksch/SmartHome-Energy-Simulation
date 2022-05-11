@@ -13,3 +13,4 @@ elasticsearch-dsl>=6.0, <7.0
 django-elasticsearch-dsl>=6.0,<7.0
 django-polymorphic
 pytest-django
+mock

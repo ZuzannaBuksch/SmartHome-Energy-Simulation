@@ -1,15 +1,20 @@
 import json
-from django.forms.models import model_to_dict
 from datetime import datetime
-from django.shortcuts import get_object_or_404
-from rest_framework import viewsets
+
+from django.forms.models import model_to_dict
+from rest_framework import generics, mixins, status, viewsets
 from rest_framework.permissions import AllowAny
-from rest_framework import viewsets, mixins, generics
 from rest_framework.response import Response
-from .models import Building, Device, DeviceRaport, EnergyGenerator, EnergyReceiver, EnergyStorage, Room
 from users.models import User
-from .serializers import BuildingSerializer, BuildingListSerializer, DeviceSerializer, RoomSerializer, PopulateDatabaseSerializer, DeviceRaportListSerializer
+
+from .models import (Building, Device, DeviceRaport, EnergyGenerator,
+                     EnergyReceiver, EnergyStorage, Room)
 from .models_calculators import DeviceCalculateManager
+from .serializers import (BuildingEnergySerializer, BuildingListSerializer,
+                          BuildingSerializer, DeviceRaportListSerializer,
+                          DeviceSerializer, PopulateDatabaseSerializer,
+                          RoomSerializer)
+
 
 class BuildingViewSet(viewsets.ModelViewSet):
     queryset = Building.objects.all()
@@ -83,16 +88,13 @@ class PopulateDatabaseView(mixins.CreateModelMixin, generics.GenericAPIView):
             for building_data in user_data.get("buildings"):
                 building = Building.objects.get_or_create(user=user, name=building_data.get("name"))[0]
                 building.save()
-                for room_data in building_data.get("building_rooms"):
-                    room = Room.objects.get_or_create(building=building, name=room_data.get("name"), area=room_data.get("area"))[0]
-                    room.save()
-                    for device_data in room_data.get("room_devices"):
-                        dev_class = self.device_classes.get(device_data.pop("type"))
-                        raports = device_data.pop("device_raports")
-                        device = dev_class.objects.get_or_create(room=room, **device_data)[0]
-                        device.save()
-                        for raport_data in raports:
-                            generated_raports.append(DeviceRaport(device=device, **raport_data))
+                for device_data in building_data.get("building_devices"):
+                    dev_class = self.device_classes.get(device_data.pop("type"))
+                    raports = device_data.pop("device_raports")
+                    device = dev_class.objects.get_or_create(building=building, **device_data)[0]
+                    device.save()
+                    for raport_data in raports:
+                        generated_raports.append(DeviceRaport(device=device, **raport_data))
         devices = DeviceRaport.objects.bulk_create(generated_raports, ignore_conflicts=True)
         serializer = DeviceRaportListSerializer(instance={"raports":devices})
         return Response({"data": serializer.data})
@@ -101,21 +103,25 @@ class BuildingEnergyView(mixins.RetrieveModelMixin, generics.GenericAPIView):
     permission_classes = [
         AllowAny,
     ]
+    queryset = Building.objects.all()
 
     @classmethod
     def get_extra_actions(cls):
         return []
     
-    # api/smarthome/energy/1?start_date=30-03-2022 10:02:01
+    # api/buildings/1/energy?start_date=30-03-2022 10:02:01
     def get(self, request, *args, **kwargs):
-        building = get_object_or_404(Building, pk=kwargs.get('pk'))
+        building = self.get_object()
         building_dict = model_to_dict(building)
-        building_dict["building_rooms"] = []
-        for room in building.building_rooms.all():
-            room_dict = model_to_dict(room)
-            room_dict["room_devices"] = []
-            for device in room.room_devices.all():
-                start_date = request.query_params.get("start_date")
-                room_dict["room_devices"].append(DeviceCalculateManager().get_device_energy(device, start_date))
-            building_dict["building_rooms"].append(room_dict)
-        return Response(building_dict)
+        serializer = BuildingEnergySerializer(data=request.query_params)
+        if serializer.is_valid():
+            start_date = serializer.to_internal_value(serializer.data).get("start_date")
+            end_date = serializer.to_internal_value(serializer.data).get("end_date")
+            building_dict["building_devices"] = []
+            for device in building.building_devices.all():
+                building_dict["building_devices"].append(DeviceCalculateManager().get_device_energy(device, start_date, end_date))
+            return Response(building_dict)
+        else:
+           return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+# class BuildingDevicesView(generics.List)

@@ -7,6 +7,7 @@ from .views import (
     RoomViewSet,
     PopulateDatabaseView,
     BuildingEnergyView,
+    # BuildingDevicesView,
 )
 
 app_name = "smarthome"
@@ -27,6 +28,7 @@ urlpatterns = [
     path(
         "buildings/<int:pk>/energy/",
         BuildingEnergyView.as_view(),
-        name="building-energy",
+        name="energy"
     ),
+    # path("buildings/<int:pk>/devices/", BuildingDevicesView.as_view(), name="building-devices"),
 ]

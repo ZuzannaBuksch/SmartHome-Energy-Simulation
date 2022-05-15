@@ -1,23 +1,15 @@
-import re
+
 from abc import ABC
-from copy import deepcopy
-from datetime import datetime, timedelta
-from os import PRIO_USER
-from pprint import pprint
+from datetime import datetime
 from typing import Dict
-from xmlrpc.client import DateTime
 
 from django.forms.models import model_to_dict
-from elasticsearch import Elasticsearch
 from elasticsearch_dsl import Search
 from elasticsearch_dsl.query import Q
 
 from .documents import (ChargeStateDocument, DeviceRaportDocument,
                         StorageChargingAndUsageDocument, WeatherDocument)
-from .models import (ChargeStateRaport, Device, DeviceRaport, EnergyGenerator,
-                     EnergyReceiver, StorageChargingAndUsageRaport)
-
-client = Elasticsearch()
+from .models import ChargeStateRaport, Device
 
 class DeviceCalculateManager():
     """Manager class for choosing strategy for calculating device energy data"""
@@ -36,7 +28,7 @@ class EnergyCalculator(ABC):
     def _filter_storage_raports_by_device_and_date(self, device: Device, start_date: datetime=None, end_date: datetime=None) -> Search:
         if not end_date:
             end_date = datetime.now()
-        raports = StorageChargingAndUsageDocument.search().query('match', device__id=device.id)
+        raports = StorageChargingAndUsageDocument.search().query(Q('match', device__id=device.id) & Q('match', device__name=device.name))
         query_filter = raports.filter(
                 Q("range", date_time_from={"gte": start_date, "lte": end_date}) |
                 Q("range", date_time_to={"gte": start_date, "lte": end_date}) |
@@ -62,7 +54,7 @@ class EnergyCalculator(ABC):
     def _filter_charge_state_raports_by_device_and_get_last_charge_state(self, device: Device, start_date: datetime=None, end_date: datetime=None) -> float:
         if not end_date:
             end_date = datetime.now()
-        raports = ChargeStateDocument.search().query('match', device__id=device.id)
+        raports = ChargeStateDocument.search().query(Q('match', device__id=device.id) & Q('match', device__name=device.name))
         raports = raports.filter(
                 Q("range", date={"lt": end_date})
         )
@@ -73,7 +65,7 @@ class EnergyCalculator(ABC):
     def _filter_raports_by_device_and_date(self, device: Device, start_date: datetime, end_date: datetime = None) -> Search:
         if not end_date:
             end_date = datetime.now()
-        raports = DeviceRaportDocument.search().query('match', device__id=device.id)
+        raports = DeviceRaportDocument.search().query(Q('match', device__id=device.id) & Q('match', device__name=device.name))
         query_filter = raports.filter(
                 Q("range", turned_on={"gte": start_date, "lte": end_date}) |
                 Q("range", turned_off={"gte": start_date, "lte": end_date}) |
@@ -150,7 +142,7 @@ class EnergyReceiverCalculator(EnergyCalculator):
             sum_of_hours += diff_in_hours
 
         kwh_factor = device.device_power / 1000 * sum_of_hours #think about rounding this factor 
-        return {"energy_consumed": kwh_factor}
+        return {"energy": kwh_factor, "sum_of_hours": sum_of_hours}
 
 class EnergyGeneratorCalculator(EnergyCalculator):
     """Energy calculating class for energy generating devices"""
@@ -187,13 +179,15 @@ class EnergyGeneratorCalculator(EnergyCalculator):
         """
         # TODO: Add rounding calculated values
         sum_of_energy_in_kwh = 0.0
+        sum_of_hours = 0.0
         for raport in weather_raports:
             diff_in_hours = self._calculate_difference_in_time(raport.datetime_from, raport.datetime_to)
+            sum_of_hours += diff_in_hours
             solar_radiation_coefficient = self._get_weather_coefficient(raport.solar_radiation, self.new_min_range, self.new_max_range)
             output_power = self._calculate_power_of_photovoltaic(solar_radiation_coefficient, device.generation_power)
             output_power_in_kwh = output_power / 1000 * diff_in_hours #think about rounding this factor 
             sum_of_energy_in_kwh += output_power_in_kwh
-        return {"energy_generated": sum_of_energy_in_kwh}
+        return {"energy": sum_of_energy_in_kwh, "sum_of_hours": sum_of_hours}
     
 class EnergyStorageCalculator(EnergyCalculator):
     """Energy calculating class for energy storing devices"""
@@ -240,4 +234,4 @@ class EnergyStorageCalculator(EnergyCalculator):
             if not end_date:
                 end_date = datetime.now()
             ChargeStateRaport.objects.create(device = device, charge_value = actual_charge_state, date = end_date)
-        return {"energy_stored": actual_charge_state}
+        return {"energy": actual_charge_state}

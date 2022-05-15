@@ -15,6 +15,7 @@ import os
 import datetime
 import environ
 import json
+import sys
 
 env = environ.Env()
 
@@ -157,6 +158,11 @@ REST_FRAMEWORK = {
     ],
     'DEFAULT_SCHEMA_CLASS': 'rest_framework.schemas.coreapi.AutoSchema',
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.LimitOffsetPagination',
+    'DEFAULT_PARSER_CLASSES': (
+        'rest_framework.parsers.JSONParser',
+        'rest_framework.parsers.FormParser',
+        'rest_framework.parsers.MultiPartParser'
+     ),
 }
 
 DJOSER = {
@@ -181,7 +187,6 @@ SIMPLE_JWT = {
 AUTHENTICATION_BACKENDS = (
     "django.contrib.auth.backends.ModelBackend",
 )
-
 
 ELASTICSEARCH_DSL = {
     'default': {

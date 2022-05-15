@@ -7,7 +7,8 @@ from .views import (
     RoomViewSet,
     PopulateDatabaseView,
     BuildingEnergyView,
-    # BuildingDevicesView,
+    BuildingDevicesView,
+    RaportsFromJsonFileViewSet,
 )
 
 app_name = "smarthome"
@@ -17,6 +18,7 @@ router = routers.SimpleRouter()
 router.register(r"devices", DeviceViewSet)
 router.register(r"buildings", BuildingViewSet)
 router.register(r"rooms", RoomViewSet)
+router.register(r"json-raports", RaportsFromJsonFileViewSet)
 
 urlpatterns = [
     path("", include(router.urls)),
@@ -30,5 +32,5 @@ urlpatterns = [
         BuildingEnergyView.as_view(),
         name="energy"
     ),
-    # path("buildings/<int:pk>/devices/", BuildingDevicesView.as_view(), name="building-devices"),
+    path("buildings/<int:pk>/devices/", BuildingDevicesView.as_view(), name="building-devices"),
 ]

@@ -44,7 +44,7 @@ class EnergyTestCase(TestCase):
             url = reverse_lazy('smarthome:energy', kwargs={'pk': 0}) #pk can by anything, the building is already mocked
             response = self.client.get(url, data={"start_date": start_date})
             building_devices = response.data.get("building_devices", [])
-            energy = building_devices[0].get("energy_consumed")
+            energy = building_devices[0].get("energy")
             self.assertEqual(len(building_devices), 1)
             self.assertEqual(energy, 1.44) #(60 W / 1000) * 24 h
 
@@ -94,9 +94,9 @@ class EnergyTestCase(TestCase):
             url = reverse_lazy('smarthome:energy', kwargs={'pk': 0}) #pk can by anything, the building is already mocked
             response = self.client.get(url, data={"start_date": start_date})
             building_devices = response.data.get("building_devices", [])
-            energy_1 = round(building_devices[0].get("energy_consumed"), 6) #0.125000
-            energy_2 = round(building_devices[1].get("energy_consumed"), 6) #0.270000
-            energy_3 = round(building_devices[2].get("energy_consumed"), 6) #0.595000
+            energy_1 = round(building_devices[0].get("energy"), 6) #0.125000
+            energy_2 = round(building_devices[1].get("energy"), 6) #0.270000
+            energy_3 = round(building_devices[2].get("energy"), 6) #0.595000
             sum_of_energy = energy_1 + energy_2 + energy_3
 
             self.assertEqual(len(building_devices), 3)
@@ -138,13 +138,13 @@ class EnergyTestCase(TestCase):
             url = reverse_lazy('smarthome:energy', kwargs={'pk': 0}) #pk can by anything, the building is already mocked
             response = self.client.get(url, data={"start_date": hour_08_00, "end_date": hour_12_30})
             building_devices = response.data.get("building_devices", [])
-            energy_generated = round(building_devices[0].get("energy_generated"), 6)
-            self.assertEqual(energy_generated, 0.428609) # 0.1025525 + 0.21717 + 0.061833125 + 0.0470535 = 0.428609125
+            energy = round(building_devices[0].get("energy"), 6)
+            self.assertEqual(energy, 0.428609) # 0.1025525 + 0.21717 + 0.061833125 + 0.0470535 = 0.428609125
 
             response = self.client.get(url, data={"start_date": hour_11_30, "end_date": hour_12_30})
             building_devices = response.data.get("building_devices", [])
-            energy_generated = round(building_devices[0].get("energy_generated"), 6)
-            self.assertEqual(energy_generated, 0.217472) # 0.108585 + 0.061833125 + 0.0470535 = 0.217471625
+            energy = round(building_devices[0].get("energy"), 6)
+            self.assertEqual(energy, 0.217472) # 0.108585 + 0.061833125 + 0.0470535 = 0.217471625
 
 
     def setUpEnergyStorageCharging(self):
@@ -178,8 +178,8 @@ class EnergyTestCase(TestCase):
             url = reverse_lazy('smarthome:energy', kwargs={'pk': 0}) #pk can by anything, the building is already mocked
             response = self.client.get(url, data={"start_date": hour_08_00, "end_date": hour_12_00})
             building_devices = response.data.get("building_devices", [])
-            energy_stored = round(building_devices[0].get("energy_stored"), 6)
-            self.assertEqual(energy_stored, 4.48 * 0.95)
+            energy = round(building_devices[0].get("energy"), 6)
+            self.assertEqual(energy, 4.48 * 0.95)
             
     
     def test_calculate_stored_energy_usage(self):
@@ -204,8 +204,8 @@ class EnergyTestCase(TestCase):
             url = reverse_lazy('smarthome:energy', kwargs={'pk': 0}) #pk can by anything, the building is already mocked
             response = self.client.get(url, data={"start_date": hour_08_00, "end_date": hour_12_00})
             building_devices = response.data.get("building_devices", [])
-            energy_stored = round(building_devices[0].get("energy_stored"), 6)
-            self.assertEqual(energy_stored, round(3.93 * 0.95, 6))
+            energy = round(building_devices[0].get("energy"), 6)
+            self.assertEqual(energy, round(3.93 * 0.95, 6))
             
     def test_calculate_stored_energy_usage_and_charging(self):
         """Energy stored is calculated correctly"""
@@ -236,8 +236,8 @@ class EnergyTestCase(TestCase):
 
             response = self.client.get(url, data={"start_date": hour_11_00, "end_date": hour_16_00})
             building_devices = response.data.get("building_devices", [])
-            energy_stored = round(building_devices[0].get("energy_stored"), 6)
-            self.assertEqual(energy_stored, round(49.855* 0.95 , 6))
+            energy = round(building_devices[0].get("energy"), 6)
+            self.assertEqual(energy, round(49.855* 0.95 , 6))
 
 
     def setUpSingleHRManyDForDatesTests(self):
@@ -277,31 +277,31 @@ class EnergyTestCase(TestCase):
             #---|start_date 10:30|---|ON 11:00|---|end_date 12:00|---|OFF None|
             response = self.client.get(url, data={"start_date": hour_10, "end_date": hour_12})
             building_devices = response.data.get("building_devices", [])
-            energy = building_devices[0].get("energy_consumed")
+            energy = building_devices[0].get("energy")
             self.assertEqual(energy, 0.06) #(60 W / 1000) * 1 h
 
             #---|ON 11:00|---|start_date 12:30|---|end_date 12:30|---|OFF None|
             response = self.client.get(url, data={"start_date": hour_12_30, "end_date": hour_15_45})
             building_devices = response.data.get("building_devices", [])
-            energy = building_devices[0].get("energy_consumed")
+            energy = building_devices[0].get("energy")
             self.assertEqual(energy, 0.195) #(60 W / 1000) * 3.25 h
 
             #---|start_date 07:00|---|end_date 08:00|---|ON 09:00|-----
             response = self.client.get(url, data={"start_date": hour_07, "end_date": hour_08})
             building_devices = response.data.get("building_devices", [])
-            energy = building_devices[0].get("energy_consumed")
+            energy = building_devices[0].get("energy")
             self.assertEqual(energy, 0.0) #(60 W / 1000) * 0 h
 
             #---|start_date 07:00|---|ON 09:00|---|OFF 10:00|---|end_date 11:00|---|ON 11:00|
             response = self.client.get(url, data={"start_date": hour_07, "end_date": hour_11})
             building_devices = response.data.get("building_devices", [])
-            energy = building_devices[0].get("energy_consumed")
+            energy = building_devices[0].get("energy")
             self.assertEqual(energy, 0.06) #(60 W / 1000) * 1 h
 
             #---|ON 09:00|---|start_date 09:30|---|OFF 10:00|---|ON 11:00|---|end_date 15:45|
             response = self.client.get(url, data={"start_date": hour_09_30, "end_date": hour_15_45})
             building_devices = response.data.get("building_devices", [])
-            energy = building_devices[0].get("energy_consumed")
+            energy = building_devices[0].get("energy")
             self.assertEqual(energy, 0.315) #(60 W / 1000) * 5.25 h
 
     def test_filter_raports_by_device_and_date(self):
@@ -323,20 +323,20 @@ class EnergyTestCase(TestCase):
 
             response = self.client.get(url, data={"start_date": hour_08, "end_date": hour_12_30})
             building_devices = response.data.get("building_devices", [])
-            energy = building_devices[1].get("energy_consumed")
+            energy = building_devices[1].get("energy")
             self.assertEqual(energy, 0.27) #(60 W / 1000) * 4.5 h
 
             response = self.client.get(url, data={"start_date": hour_08, "end_date": hour_09_30})
             building_devices = response.data.get("building_devices", [])
-            energy1 = building_devices[1].get("energy_consumed")
+            energy1 = building_devices[1].get("energy")
 
             response = self.client.get(url, data={"start_date": hour_09_30, "end_date": hour_11})
             building_devices = response.data.get("building_devices", [])
-            energy2 = building_devices[1].get("energy_consumed")
+            energy2 = building_devices[1].get("energy")
 
             response = self.client.get(url, data={"start_date": hour_11, "end_date": hour_12_30})
             building_devices = response.data.get("building_devices", [])
-            energy3 = building_devices[1].get("energy_consumed")
+            energy3 = building_devices[1].get("energy")
 
             total_energy = energy1 + energy2 + energy3
             self.assertEqual(total_energy, energy) 

@@ -15,6 +15,7 @@ import os
 import datetime
 import environ
 import json
+import sys
 
 env = environ.Env()
 
@@ -186,7 +187,6 @@ SIMPLE_JWT = {
 AUTHENTICATION_BACKENDS = (
     "django.contrib.auth.backends.ModelBackend",
 )
-
 
 ELASTICSEARCH_DSL = {
     'default': {

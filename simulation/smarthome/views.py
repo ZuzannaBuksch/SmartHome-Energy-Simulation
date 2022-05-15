@@ -143,6 +143,7 @@ class BuildingEnergyView(mixins.RetrieveModelMixin, generics.GenericAPIView):
         if serializer.is_valid():
             start_date = serializer.to_internal_value(serializer.data).get("start_date")
             end_date = serializer.to_internal_value(serializer.data).get("end_date")
+            print(start_date, end_date)
             building_dict["building_devices"] = []
             for device in building.building_devices.all():
                 building_dict["building_devices"].append(DeviceCalculateManager().get_device_energy(device, start_date, end_date))

@@ -9,6 +9,7 @@ from .views import (
     BuildingEnergyView,
     BuildingDevicesView,
     RaportsFromJsonFileViewSet,
+    DeviceRaportsView,
 )
 
 app_name = "smarthome"
@@ -33,4 +34,5 @@ urlpatterns = [
         name="energy"
     ),
     path("buildings/<int:pk>/devices/", BuildingDevicesView.as_view(), name="building-devices"),
+    path("devices/<int:pk>/device-raports/", DeviceRaportsView.as_view(), name="device-raports"),
 ]

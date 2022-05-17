@@ -10,7 +10,7 @@ from users.models import User
 from .models import (Building, Device, DeviceRaport, EnergyGenerator,
                      EnergyReceiver, EnergyStorage, Room)
 from .models_calculators import DeviceCalculateManager
-from .serializers import (BuildingListSerializer, BuildingSerializer,
+from .serializers import (BuildingListSerializer, BuildingSerializer, 
                           DeviceRaportListSerializer, DeviceRaportSerializer, DeviceSerializer,
                           PopulateDatabaseSerializer, RoomSerializer, BuildingEnergySerializer)
 from django.shortcuts import get_object_or_404
@@ -171,6 +171,31 @@ class BuildingDevicesView(generics.ListAPIView):
             serializer = self.serializer_class(data=device)
             if serializer.is_valid():
                 serializer.save()
+            else:
+                return Response(data=serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response(data=serializer.data, status=status.HTTP_200_OK)
+        
+class DeviceRaportsView(generics.ListAPIView):
+    queryset = DeviceRaport.objects.all()
+    serializer_class = DeviceRaportSerializer
+    permission_classes = [
+        AllowAny,
+    ]
+
+    def get_queryset(self):
+        return self.queryset.filter(device__pk=self.kwargs["pk"])
+
+    @transaction.atomic
+    def post(self, request, *args, **kwargs):
+        device = get_object_or_404(Device, id=kwargs.get("pk"))
+        raports_data = request.data
+        for raport in raports_data:  #must be in a loop because polymorphic not allow to serialize many
+            raport["device"] = device.id
+            serializer = self.serializer_class(data=raport)
+            if serializer.is_valid(raise_exception=True):
+                serializer.save()
+                pass
             else:
                 return Response(data=serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 

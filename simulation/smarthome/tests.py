@@ -9,7 +9,7 @@ from users.models import User
 from .models import (Building, ChargeStateRaport, DeviceRaport,
                      EnergyGenerator, EnergyReceiver, EnergyStorage,
                      StorageChargingAndUsageRaport, WeatherRaport)
-from .views import BuildingEnergyView
+from .views import BuildingEnergyView, BuildingStorageEnergyView
 
 
 class EnergyTestCase(TestCase):
@@ -174,8 +174,8 @@ class EnergyTestCase(TestCase):
 
         EnergyReceiver.objects.create(building=building, name="bulb3", state=False, device_power=70, supply_voltage=8)
         StorageChargingAndUsageRaport.objects.create(date_time_from = hour_11_00, date_time_to = hour_12_00, device = device, job_type = 'CH')
-        with patch.object(BuildingEnergyView, 'get_object', return_value=building):
-            url = reverse_lazy('smarthome:energy', kwargs={'pk': 0}) #pk can by anything, the building is already mocked
+        with patch.object(BuildingStorageEnergyView, 'get_object', return_value=building):
+            url = reverse_lazy('smarthome:storage_energy', kwargs={'pk': 0}) #pk can by anything, the building is already mocked
             response = self.client.get(url, data={"start_date": hour_08_00, "end_date": hour_12_00})
             building_devices = response.data.get("building_devices", [])
             energy = round(building_devices[0].get("energy"), 6)
@@ -200,8 +200,8 @@ class EnergyTestCase(TestCase):
 
         receiver = EnergyReceiver.objects.create(building=building, name="bulb3", state=False, device_power=70, supply_voltage=8)
         StorageChargingAndUsageRaport.objects.create(date_time_from = hour_11_00, date_time_to = hour_12_00, device = device, energy_receiver = receiver, job_type = 'US')
-        with patch.object(BuildingEnergyView, 'get_object', return_value=building):
-            url = reverse_lazy('smarthome:energy', kwargs={'pk': 0}) #pk can by anything, the building is already mocked
+        with patch.object(BuildingStorageEnergyView, 'get_object', return_value=building):
+            url = reverse_lazy('smarthome:storage_energy', kwargs={'pk': 0}) #pk can by anything, the building is already mocked
             response = self.client.get(url, data={"start_date": hour_08_00, "end_date": hour_12_00})
             building_devices = response.data.get("building_devices", [])
             energy = round(building_devices[0].get("energy"), 6)
@@ -231,8 +231,8 @@ class EnergyTestCase(TestCase):
         
         StorageChargingAndUsageRaport.objects.create(date_time_from = hour_15_45,  device = device, job_type = 'CH')
 
-        with patch.object(BuildingEnergyView, 'get_object', return_value=building):
-            url = reverse_lazy('smarthome:energy', kwargs={'pk': 0}) #pk can by anything, the building is already mocked
+        with patch.object(BuildingStorageEnergyView, 'get_object', return_value=building):
+            url = reverse_lazy('smarthome:storage_energy', kwargs={'pk': 0}) #pk can by anything, the building is already mocked
 
             response = self.client.get(url, data={"start_date": hour_11_00, "end_date": hour_16_00})
             building_devices = response.data.get("building_devices", [])

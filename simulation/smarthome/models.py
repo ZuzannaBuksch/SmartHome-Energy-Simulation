@@ -1,5 +1,4 @@
 from datetime import datetime
-from xml.dom import ValidationErr
 
 from django.db import models
 from polymorphic.models import PolymorphicModel
@@ -90,21 +89,22 @@ class WeatherRaport(models.Model):
 
     def __str__(self):
         return f"Weather raport: {str(self.id)}"
+        
 class StorageChargingAndUsageRaport(models.Model):
-    CHARGING = 'CH'
-    USAGE = 'US'
+    CHARGING = 'CHARGING'
+    USAGE = 'USAGE'
     job_types = [
         (CHARGING, "charging"),
         (USAGE, "usage"),
     ]
-    job_type = models.CharField(max_length=2, choices=job_types)
+    job_type = models.CharField(max_length=8, choices=job_types)
     date_time_from = models.DateTimeField()
     date_time_to = models.DateTimeField(null=True, blank=True)
     device = models.ForeignKey(
-        EnergyStorage, null=True, on_delete=models.CASCADE, related_name="storage_charging_and_usage_raports"
+        EnergyStorage, on_delete=models.CASCADE, related_name="storage_charging_and_usage_raports"
     )
     energy_receiver = models.ForeignKey(
-        EnergyReceiver, null=True, on_delete=models.CASCADE, related_name="storage_usage_devices_raports_v2"
+        EnergyReceiver, null=True, blank=True, on_delete=models.CASCADE, related_name="storage_usage_devices_raports_v2"
     )
 
     class Meta:

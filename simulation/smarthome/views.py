@@ -7,12 +7,12 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from users.models import User
 
-from .models import (Building, Device, DeviceRaport, EnergyGenerator,
-                     EnergyReceiver, EnergyStorage, Room)
-from .models_calculators import DeviceCalculateManager
-from .serializers import (BuildingListSerializer, BuildingSerializer, 
-                          DeviceRaportListSerializer, DeviceRaportSerializer, DeviceSerializer,
-                          PopulateDatabaseSerializer, RoomSerializer, BuildingEnergySerializer)
+from .models import (Building, Device, DeviceRaport, EnergyGenerator, ChargeStateRaport,
+                     EnergyReceiver, EnergyStorage, Room, StorageChargingAndUsageRaport)
+from .models_calculators import DeviceCalculateManager, EnergyCalculator
+from .serializers import (BuildingListSerializer, BuildingSerializer, StorageChargingAndUsageRaportSerializer,
+                          DeviceRaportListSerializer, DeviceRaportSerializer, DeviceSerializer, ChargeStateRaportSerializer,
+                          PopulateDatabaseSerializer, RoomSerializer, DatesRangeSerializer)
 from django.shortcuts import get_object_or_404
 from django.db import transaction
 
@@ -41,6 +41,19 @@ class DeviceViewSet(viewsets.ModelViewSet):
         AllowAny,
     ]
 
+    def retrieve(self, request, *args, **kwagrs):
+        response = super().retrieve(request, *args, **kwagrs)
+        device = self.get_object()
+        if device.type == EnergyStorage.__name__:
+            serializer = DatesRangeSerializer(data=request.query_params)
+            if serializer.is_valid(raise_exception=True):
+                start_date = serializer.to_internal_value(serializer.data).get("start_date")
+                end_date = serializer.to_internal_value(serializer.data).get("end_date")
+                raports_docs = EnergyCalculator.filter_storage_raports_by_device_and_date(device, start_date, end_date)
+                raports = [StorageChargingAndUsageRaport.objects.get(id=raport.id) for raport in raports_docs]
+                response.data["raports"] = [model_to_dict(raport) for raport in raports]
+        return Response(data=response.data, status=response.status_code)
+
     def partial_update(self, request, *args, **kwargs):
         device = self.get_object()
         cached_state = device.state
@@ -55,13 +68,6 @@ class DeviceViewSet(viewsets.ModelViewSet):
                 device_raport.save()
         return json_device
         
-
-class RoomViewSet(viewsets.ModelViewSet):
-    queryset = Room.objects.all()
-    serializer_class = RoomSerializer
-    permission_classes = [
-        AllowAny,
-    ]
 
 
 class PopulateDatabaseView(mixins.CreateModelMixin, generics.GenericAPIView):
@@ -139,13 +145,41 @@ class BuildingEnergyView(mixins.RetrieveModelMixin, generics.GenericAPIView):
     def get(self, request, *args, **kwargs):
         building = self.get_object()
         building_dict = model_to_dict(building)
-        serializer = BuildingEnergySerializer(data=request.query_params)
+        serializer = DatesRangeSerializer(data=request.query_params)
         if serializer.is_valid():
             start_date = serializer.to_internal_value(serializer.data).get("start_date")
             end_date = serializer.to_internal_value(serializer.data).get("end_date")
-            print(start_date, end_date)
             building_dict["building_devices"] = []
             for device in building.building_devices.all():
+                if device.type == EnergyStorage.__name__:
+                    continue
+                building_dict["building_devices"].append(DeviceCalculateManager().get_device_energy(device, start_date, end_date))
+            return Response(building_dict)
+        else:
+           return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+class BuildingStorageEnergyView(mixins.RetrieveModelMixin, generics.GenericAPIView):
+    permission_classes = [
+        AllowAny,
+    ]
+    queryset = Building.objects.all()
+
+    @classmethod
+    def get_extra_actions(cls):
+        return []
+    
+    # api/buildings/1/energy-storage?start_date=30-03-2022 10:02:01
+    def get(self, request, *args, **kwargs):
+        building = self.get_object()
+        building_dict = model_to_dict(building)
+        serializer = DatesRangeSerializer(data=request.query_params)
+        if serializer.is_valid():
+            start_date = serializer.to_internal_value(serializer.data).get("start_date")
+            end_date = serializer.to_internal_value(serializer.data).get("end_date")
+            building_dict["building_devices"] = []
+            for device in building.building_devices.all():
+                if device.type != EnergyStorage.__name__:
+                    continue
                 building_dict["building_devices"].append(DeviceCalculateManager().get_device_energy(device, start_date, end_date))
             return Response(building_dict)
         else:
@@ -169,7 +203,7 @@ class BuildingDevicesView(generics.ListAPIView):
             device["building"] = building.id
             device["resourcetype"] = device.get("type")
             serializer = self.serializer_class(data=device)
-            if serializer.is_valid():
+            if serializer.is_valid(raise_exception=True):
                 serializer.save()
             else:
                 return Response(data=serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -179,16 +213,70 @@ class BuildingDevicesView(generics.ListAPIView):
 class DeviceRaportsView(generics.ListAPIView):
     queryset = DeviceRaport.objects.all()
     serializer_class = DeviceRaportSerializer
+    storage_serializer_class = StorageChargingAndUsageRaportSerializer
+    permission_classes = [
+        AllowAny,
+    ]
+
+    def get_serializer_class(self, *args, **kwargs):
+        if kwargs.get("device_type") == EnergyStorage.__name__:
+            return self.storage_serializer_class
+        return self.serializer_class
+
+
+    @transaction.atomic
+    def post(self, request, *args, **kwargs):
+        device = get_object_or_404(Device, id=kwargs.get("pk"))
+        raports_data = request.data
+        for raport in raports_data:  #must be in a loop because polymorphic not allow to serialize many
+            raport["device"] = device.id
+            serializer = self.get_serializer_class(device_type=device.type)(data=raport)
+            if serializer.is_valid(raise_exception=True):
+                serializer.save()
+                pass
+            else:
+                return Response(data=serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response(data=serializer.data, status=status.HTTP_200_OK)
+
+    def get(self, request, *args, **kwargs):
+        device = get_object_or_404(Device, id=kwargs.get("pk"))
+        date_serializer = DatesRangeSerializer(data=request.query_params)
+        if date_serializer.is_valid(raise_exception=True):
+            start_date = date_serializer.to_internal_value(date_serializer.data).get("start_date")
+            end_date = date_serializer.to_internal_value(date_serializer.data).get("end_date")
+        else:
+            return Response(serializer.errors)
+
+        if device.type == EnergyStorage.__name__: 
+            raports_docs = EnergyCalculator.filter_storage_raports_by_device_and_date(device, start_date, end_date)
+            raports = [StorageChargingAndUsageRaport.objects.get(id=raport.id) for raport in raports_docs]
+            serializer = StorageChargingAndUsageRaportSerializer(raports, many=True)
+        else:
+            raports_docs = EnergyCalculator.filter_raports_by_device_and_date(device, start_date, end_date)
+            raports = [DeviceRaport.objects.get(id=raport.id) for raport in raports_docs]
+            serializer = DeviceRaportSerializer(raports, many=True)
+        return Response(serializer.data)
+
+class ChargeStateRaportView(generics.ListCreateAPIView):
+    queryset = ChargeStateRaport.objects.all()
+    serializer_class = ChargeStateRaportSerializer
     permission_classes = [
         AllowAny,
     ]
 
     def get_queryset(self):
-        return self.queryset.filter(device__pk=self.kwargs["pk"])
-
+        queryset = self.queryset
+        device_queryset = queryset.filter(device__pk=self.kwargs["pk"])
+        start_date = self.request.query_params.get("start_date") 
+        end_date = self.request.query_params.get("end_date")
+        if start_date and end_date:
+            device_queryset = device_queryset.filter(date__range=[start_date, end_date])
+        return device_queryset
+    
     @transaction.atomic
     def post(self, request, *args, **kwargs):
-        device = get_object_or_404(Device, id=kwargs.get("pk"))
+        device = get_object_or_404(EnergyStorage, id=kwargs.get("pk"))
         raports_data = request.data
         for raport in raports_data:  #must be in a loop because polymorphic not allow to serialize many
             raport["device"] = device.id
@@ -200,4 +288,3 @@ class DeviceRaportsView(generics.ListAPIView):
                 return Response(data=serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
         return Response(data=serializer.data, status=status.HTTP_200_OK)
-        

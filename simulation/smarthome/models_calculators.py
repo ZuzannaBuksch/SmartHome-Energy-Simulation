@@ -1,4 +1,5 @@
 
+from builtins import IndexError
 from abc import ABC
 from datetime import datetime
 from typing import Dict
@@ -25,7 +26,8 @@ class DeviceCalculateManager():
 class EnergyCalculator(ABC):
     """Abstract class that provides interface with methods for concrete energy calculators"""
 
-    def _filter_storage_raports_by_device_and_date(self, device: Device, start_date: datetime=None, end_date: datetime=None) -> Search:
+    @staticmethod
+    def filter_storage_raports_by_device_and_date(device: Device, start_date: datetime=None, end_date: datetime=None) -> Search:
         if not end_date:
             end_date = datetime.now()
         raports = StorageChargingAndUsageDocument.search().query(Q('match', device__id=device.id) & Q('match', device__name=device.name))
@@ -43,6 +45,7 @@ class EnergyCalculator(ABC):
                 )
         )
         response = query_filter.execute()
+        
         for raport in response:
             if raport.date_time_to:
                 raport.date_time_to = end_date if raport.date_time_to > end_date else raport.date_time_to
@@ -51,7 +54,8 @@ class EnergyCalculator(ABC):
             raport.date_time_from = start_date if raport.date_time_from < start_date else raport.date_time_from
         return response
 
-    def _filter_charge_state_raports_by_device_and_get_last_charge_state(self, device: Device, start_date: datetime=None, end_date: datetime=None) -> float:
+    @staticmethod
+    def filter_charge_state_raports_by_device_and_get_last_charge_state(device: Device, end_date: datetime=None) -> float:
         if not end_date:
             end_date = datetime.now()
         raports = ChargeStateDocument.search().query(Q('match', device__id=device.id) & Q('match', device__name=device.name))
@@ -59,10 +63,15 @@ class EnergyCalculator(ABC):
                 Q("range", date={"lt": end_date})
         )
         raports = raports.sort({"date" : {"order" : "asc"}})
-        last_charge_state = raports.execute()[-1].charge_value #kwh
+        try:
+            last_charge_state = raports.execute()[-1].charge_value #kwh
+        except IndexError:
+            raise ValueError('There were not any energy storage in the building at selected time.')
+            # moze sie zdazyc, ze storage stworzono 15go maja, wiec dla zapytania o stan z 14go maja nie ma wynikow.
         return last_charge_state
 
-    def _filter_raports_by_device_and_date(self, device: Device, start_date: datetime, end_date: datetime = None) -> Search:
+    @staticmethod
+    def filter_raports_by_device_and_date(device: Device, start_date: datetime, end_date: datetime = None) -> Search:
         if not end_date:
             end_date = datetime.now()
         raports = DeviceRaportDocument.search().query(Q('match', device__id=device.id) & Q('match', device__name=device.name))
@@ -123,7 +132,7 @@ class EnergyReceiverCalculator(EnergyCalculator):
     """Energy calculating class for energy receiving devices"""
 
     def get_device_energy_calculation(self, device: Device, start_date: datetime=None, end_date: datetime=None) -> dict:
-        device_raports = self._filter_raports_by_device_and_date(device, start_date, end_date)
+        device_raports = self.filter_raports_by_device_and_date(device, start_date, end_date)
         return {
             **model_to_dict(device),
             **self._calculate_energy_data(device, device_raports),
@@ -196,8 +205,8 @@ class EnergyStorageCalculator(EnergyCalculator):
     charging_loss_factor = 0.05
 
     def get_device_energy_calculation(self, device: Device, start_date: datetime=None, end_date: datetime=None) -> dict:
-        storage_raports = self._filter_storage_raports_by_device_and_date(device, start_date, end_date)
-        last_charge_state = self._filter_charge_state_raports_by_device_and_get_last_charge_state(device, start_date, end_date)
+        storage_raports = self.filter_storage_raports_by_device_and_date(device, start_date, end_date)
+        last_charge_state = self.filter_charge_state_raports_by_device_and_get_last_charge_state(device, end_date)
         return {
             **model_to_dict(device),
             **self._calculate_energy_data(device, storage_raports, last_charge_state, end_date),
@@ -233,5 +242,5 @@ class EnergyStorageCalculator(EnergyCalculator):
             actual_charge_state = actual_charge_state * (1 - self.charging_loss_factor) 
             if not end_date:
                 end_date = datetime.now()
-            ChargeStateRaport.objects.create(device = device, charge_value = actual_charge_state, date = end_date)
+            # ChargeStateRaport.objects.create(device = device, charge_value = actual_charge_state, date = end_date)
         return {"energy": actual_charge_state}

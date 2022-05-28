@@ -2,7 +2,7 @@ from django.contrib import admin
 
 from .models import (Building, ChargeStateRaport, Device, DeviceRaport,
                      EnergyGenerator, EnergyReceiver, EnergyStorage, Room,
-                     WeatherRaport)
+                     WeatherRaport, StorageChargingAndUsageRaport)
 
 admin.site.register(DeviceRaport)
 admin.site.register(Device)
@@ -13,5 +13,6 @@ admin.site.register(EnergyGenerator)
 admin.site.register(Room)
 admin.site.register(WeatherRaport)
 admin.site.register(ChargeStateRaport)
+admin.site.register(StorageChargingAndUsageRaport)
 
 # Register your models here.

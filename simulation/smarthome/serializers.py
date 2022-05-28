@@ -1,8 +1,8 @@
 from rest_framework import serializers
 from rest_polymorphic.serializers import PolymorphicSerializer
 
-from .models import (Building, Device, DeviceRaport, EnergyGenerator,
-                     EnergyReceiver, EnergyStorage, Room)
+from .models import (Building, Device, DeviceRaport, EnergyGenerator, ChargeStateRaport,
+                     EnergyReceiver, EnergyStorage, Room, StorageChargingAndUsageRaport)
 
 
 class EnergyGeneratorSerializer(serializers.ModelSerializer):
@@ -23,7 +23,7 @@ class EnergyStorageSerializer(serializers.ModelSerializer):
     id = serializers.IntegerField()
     class Meta:
         model = EnergyStorage
-        fields = ('id', 'building', 'name', 'state', 'room', 'capacity', 'battery_charge', 'type', 'battery_voltage')
+        fields = ('id', 'building', 'name', 'state', 'room', 'capacity', 'type', 'battery_voltage')
 
 
 class DeviceSerializer(PolymorphicSerializer):
@@ -70,6 +70,18 @@ class DeviceRaportSerializer(serializers.ModelSerializer):
         fields = "__all__"
 
 
+class StorageChargingAndUsageRaportSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = StorageChargingAndUsageRaport
+        fields = "__all__"
+
+
+class ChargeStateRaportSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ChargeStateRaport
+        fields = "__all__"
+
+
 class DeviceRaportListSerializer(serializers.Serializer):
     raports = serializers.ListField(child=DeviceRaportSerializer())
 
@@ -78,8 +90,10 @@ class PopulateDatabaseSerializer(serializers.Serializer):
     data = serializers.CharField()
 
 
-class BuildingEnergySerializer(serializers.Serializer):
+class DatesRangeSerializer(serializers.Serializer):
     start_date = serializers.DateTimeField(format="%Y-%m-%d %H:%M:%S", input_formats=['%Y-%m-%d %H:%M:%S'])
     end_date = serializers.DateTimeField(format="%Y-%m-%d %H:%M:%S", input_formats=['%Y-%m-%d %H:%M:%S'], required=False)
 
 
+class EndDateSerializer(serializers.Serializer):
+    end_date = serializers.DateTimeField(format="%Y-%m-%d %H:%M:%S", input_formats=['%Y-%m-%d %H:%M:%S'])

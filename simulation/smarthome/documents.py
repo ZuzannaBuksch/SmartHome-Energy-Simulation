@@ -10,6 +10,7 @@ connections.create_connection(**ELASTICSEARCH_CONNECTION)
 
 @registry.register_document
 class DeviceRaportDocument(Document):
+    id = fields.IntegerField(attr='id')
     device = fields.ObjectField(properties={
             'name' : fields.TextField(),
             'id' : fields.IntegerField(attr='id'),
@@ -57,6 +58,7 @@ class WeatherDocument(Document):
 
 @registry.register_document
 class StorageChargingAndUsageDocument(Document):
+    id = fields.IntegerField(attr='id')
     device = fields.ObjectField(properties={
             'name' : fields.TextField(),
             'id' : fields.IntegerField(attr='id')
@@ -93,6 +95,7 @@ class StorageChargingAndUsageDocument(Document):
 
 @registry.register_document
 class ChargeStateDocument(Document):
+    id = fields.IntegerField(attr='id')
     device = fields.ObjectField(properties={
             'name' : fields.TextField(),
             'id' : fields.IntegerField(attr='id'),

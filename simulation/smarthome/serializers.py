@@ -2,14 +2,14 @@ from rest_framework import serializers
 from rest_polymorphic.serializers import PolymorphicSerializer
 
 from .models import (Building, Device, DeviceRaport, EnergyGenerator, ChargeStateRaport,
-                     EnergyReceiver, EnergyStorage, Room, StorageChargingAndUsageRaport)
+                     EnergyReceiver, EnergyStorage, Room, StorageChargingAndUsageRaport, WeatherRaport)
 
 
 class EnergyGeneratorSerializer(serializers.ModelSerializer):
     id = serializers.IntegerField()
     class Meta:
         model = EnergyGenerator
-        fields = ('id', 'building', 'name', 'state', 'room','efficiency', 'type', 'generation_power')
+        fields = ('id', 'building', 'name', 'state', 'room', 'type', 'generation_power')
 
 
 class EnergyReceiverSerializer(serializers.ModelSerializer):
@@ -69,6 +69,10 @@ class DeviceRaportSerializer(serializers.ModelSerializer):
         model = DeviceRaport
         fields = "__all__"
 
+class WeatherRaportSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = WeatherRaport
+        fields = "__all__"
 
 class StorageChargingAndUsageRaportSerializer(serializers.ModelSerializer):
     class Meta:
@@ -84,6 +88,9 @@ class ChargeStateRaportSerializer(serializers.ModelSerializer):
 
 class DeviceRaportListSerializer(serializers.Serializer):
     raports = serializers.ListField(child=DeviceRaportSerializer())
+
+class WeatherRaportListSerializer(serializers.Serializer):
+    raports = serializers.ListField(child=WeatherRaportSerializer())
 
 
 class PopulateDatabaseSerializer(serializers.Serializer):

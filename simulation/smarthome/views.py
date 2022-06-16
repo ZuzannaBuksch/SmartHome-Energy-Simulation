@@ -5,14 +5,13 @@ from django.forms.models import model_to_dict
 from rest_framework import generics, mixins, status, viewsets
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
-from users.models import User
 
-from .models import (Building, Device, DeviceRaport, EnergyGenerator, ChargeStateRaport,
-                     EnergyReceiver, EnergyStorage, Room, StorageChargingAndUsageRaport)
+from .models import (Building, Device, DeviceRaport,  ChargeStateRaport,
+                     EnergyStorage,  StorageChargingAndUsageRaport)
 from .models_calculators import DeviceCalculateManager, EnergyCalculator
 from .serializers import (BuildingListSerializer, BuildingSerializer, StorageChargingAndUsageRaportSerializer,
-                          DeviceRaportListSerializer, DeviceRaportSerializer, DeviceSerializer, ChargeStateRaportSerializer,
-                          PopulateDatabaseSerializer, RoomSerializer, DatesRangeSerializer)
+                        DeviceRaportSerializer, DeviceSerializer, ChargeStateRaportSerializer,
+                          DatesRangeSerializer)
 from django.shortcuts import get_object_or_404
 from django.db import transaction
 
@@ -68,67 +67,6 @@ class DeviceViewSet(viewsets.ModelViewSet):
                 device_raport.save()
         return json_device
         
-
-
-class PopulateDatabaseView(mixins.CreateModelMixin, generics.GenericAPIView):
-    serializer_class = PopulateDatabaseSerializer
-    permission_classes = [
-        AllowAny,
-    ]
-    device_classes = {
-            "EnergyReceiver": EnergyReceiver,
-            "EnergyGenerator": EnergyGenerator,
-            "EnergyStorage": EnergyStorage
-    }
-
-
-    @classmethod
-    def get_extra_actions(cls):
-        return []
-
-    def post(self, request, *args, **kwargs):
-        generated_raports = []
-        request_data = json.loads(request.data.get('data'))
-        for user_data in request_data:
-            user = User.objects.get_or_create(email=user_data.get("email"))[0]
-            user.save()
-            for building_data in user_data.get("buildings"):
-                building = Building.objects.get_or_create(user=user, name=building_data.get("name"))[0]
-                building.save()
-                for device_data in building_data.get("building_devices"):
-                    dev_class = self.device_classes.get(device_data.pop("type"))
-                    raports = device_data.pop("device_raports")
-                    device = dev_class.objects.get_or_create(building=building, **device_data)[0]
-                    device.save()
-                    for raport_data in raports:
-                        generated_raports.append(DeviceRaport(device=device, **raport_data))
-        devices = DeviceRaport.objects.bulk_create(generated_raports, ignore_conflicts=True)
-        serializer = DeviceRaportListSerializer(instance={"raports":devices})
-        return Response({"data": serializer.data})
-
-
-class RaportsFromJsonFileViewSet(viewsets.ModelViewSet):
-    queryset = DeviceRaport.objects.all()
-    serializer_class = DeviceRaportSerializer
-    permission_classes = [
-        AllowAny,
-    ]
-
-    @transaction.atomic
-    def create(self, request):
-        with open("raports.txt", "r") as f:
-            devices = json.load(f)
-        generated_raports = []
-        for device_data in devices:
-            device_id = device_data.get("device")
-            device = Device.objects.get(id=device_id)
-            for raport_data in device_data.get("raports"):
-                if not raport_data.get("turned_off"):
-                    raport_data.pop("turned_off")
-                generated_raports.append(DeviceRaport(device=device, **raport_data))
-        devices = DeviceRaport.objects.bulk_create(generated_raports, ignore_conflicts=True)
-        serializer = DeviceRaportListSerializer(instance={"raports":devices})
-        return Response({"data": serializer.data})
 
 
 class BuildingEnergyView(mixins.RetrieveModelMixin, generics.GenericAPIView):
@@ -202,6 +140,7 @@ class BuildingDevicesView(generics.ListAPIView):
         for device in device_data:  #must be in a loop because polymorphic not allow to serialize many
             device["building"] = building.id
             device["resourcetype"] = device.get("type")
+
             serializer = self.serializer_class(data=device)
             if serializer.is_valid(raise_exception=True):
                 serializer.save()
@@ -274,17 +213,16 @@ class ChargeStateRaportView(generics.ListCreateAPIView):
             device_queryset = device_queryset.filter(date__range=[start_date, end_date])
         return device_queryset
     
-    @transaction.atomic
-    def post(self, request, *args, **kwargs):
-        device = get_object_or_404(EnergyStorage, id=kwargs.get("pk"))
-        raports_data = request.data
-        for raport in raports_data:  #must be in a loop because polymorphic not allow to serialize many
-            raport["device"] = device.id
-            serializer = self.serializer_class(data=raport)
-            if serializer.is_valid(raise_exception=True):
-                serializer.save()
-                pass
-            else:
-                return Response(data=serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    # @transaction.atomic
+    # def post(self, request, *args, **kwargs):
+    #     device = get_object_or_404(EnergyStorage, id=kwargs.get("pk"))
+    #     raports_data = request.data
+    #     for raport in raports_data:  #must be in a loop because polymorphic not allow to serialize many
+    #         raport["device"] = device.id
+    #         serializer = self.serializer_class(data=raport)
+    #         if serializer.is_valid(raise_exception=True):
+    #             serializer.save()
+    #         else:
+    #             return Response(data=serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-        return Response(data=serializer.data, status=status.HTTP_200_OK)
+    #     return Response(data=serializer.data, status=status.HTTP_200_OK)

@@ -4,10 +4,8 @@ from rest_framework import routers
 from .views import (
     BuildingViewSet,
     DeviceViewSet,
-    PopulateDatabaseView,
     BuildingEnergyView,
     BuildingDevicesView,
-    RaportsFromJsonFileViewSet,
     DeviceRaportsView,
     BuildingStorageEnergyView,
     ChargeStateRaportView,
@@ -19,15 +17,9 @@ app_name = "smarthome"
 router = routers.SimpleRouter()
 router.register(r"devices", DeviceViewSet)
 router.register(r"buildings", BuildingViewSet)
-router.register(r"json-raports", RaportsFromJsonFileViewSet)
 
 urlpatterns = [
     path("", include(router.urls)),
-    path(
-        "populate/", 
-        PopulateDatabaseView.as_view(), 
-        name="populate"
-        ),
     path(
         "buildings/<int:pk>/energy/",
         BuildingEnergyView.as_view(),

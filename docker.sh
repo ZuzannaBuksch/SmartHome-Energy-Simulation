@@ -13,7 +13,8 @@ Containers:
     elastic                         create and populate Elasticsearch index
     admin                           create admin account
     postgres                        run psql commands in the postgres container
-    postgres-rm <user_id>           delete selected user from database                    
+    postgres-rm <user_id>           delete selected user from database
+    populate-db                     fill database with data from text files
     purge                           purge unused containers and images
 Tests:
     tests                            run tests
@@ -37,7 +38,7 @@ case "$1" in
         docker images | grep none | awk '{print "docker rmi " $3;}' | sh
         ;;
     tests)
-        docker-compose run --rm simulation python simulation/manage.py test smarthome.tests
+        docker-compose run --rm simulation pytest -s
         ;;
     migrate)
         docker-compose run --rm simulation python simulation/manage.py makemigrations
@@ -45,6 +46,9 @@ case "$1" in
         ;;
     elastic)
         docker-compose run --rm simulation python simulation/manage.py search_index --rebuild
+        ;; 
+    populate-db) #--weather
+        docker-compose run --rm simulation python simulation/populate_db_from_file.py ${@:2}
         ;;
     admin)
         docker-compose run --rm simulation python simulation/manage.py createsuperuser

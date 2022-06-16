@@ -57,7 +57,7 @@ class EnergyGenerator(Device):
 
 class EnergyStorage(Device):
     capacity = models.FloatField() #[Ah]
-    battery_voltage = models.FloatField(null=True, blank=True) # You are trying to add a non-nullable field 'battery_voltage' to energystorage without a default; we can't do that (t (the database needs something to populate existing rows).
+    battery_voltage = models.FloatField(null=True, blank=True) 
     
     def __str__(self):
         return f"Energy storing device: {str(self.id)} | name: {self.name}"
@@ -84,8 +84,8 @@ class WeatherRaport(models.Model):
     datetime_from = models.DateTimeField()
     datetime_to = models.DateTimeField(null=True, blank=True)
     solar_radiation = models.FloatField()
-    temperature = models.FloatField()
-    wind_speed = models.FloatField()
+    temperature = models.FloatField(null=True, blank=True)
+    wind_speed = models.FloatField(null=True, blank=True)
 
     def __str__(self):
         return f"Weather raport: {str(self.id)}"
@@ -103,9 +103,7 @@ class StorageChargingAndUsageRaport(models.Model):
     device = models.ForeignKey(
         EnergyStorage, on_delete=models.CASCADE, related_name="storage_charging_and_usage_raports"
     )
-    energy_receiver = models.ForeignKey(
-        EnergyReceiver, null=True, blank=True, on_delete=models.CASCADE, related_name="storage_usage_devices_raports_v2"
-    )
+    energy_use = models.FloatField(null=False)
 
     class Meta:
         unique_together = ('device', 'date_time_from',)
@@ -113,6 +111,25 @@ class StorageChargingAndUsageRaport(models.Model):
 
     def __str__(self):
         return f"Storage charging and usage raport: {str(self.id)} | device: {self.device.name}"
+
+    def save(self, *args, **kwargs):
+        try:
+            current_charge_value = ChargeStateRaport.objects.filter(device=self.device).last().charge_value
+        except AttributeError:
+            current_charge_value = 0
+        
+        if self.job_type == self.CHARGING:
+            current_charge_value += self.energy_use
+            if current_charge_value > self.device.capacity:
+                raise ValueError("Energy in storage can't exceed 100%!")
+
+        if self.usage_type == self.USAGE:
+            current_charge_value -= self.energy_use
+            if current_charge_value < 0:
+                raise ValueError("Energy in storage can't be less than 0!")
+        
+        ChargeStateRaport.objects.create(date=self.date_time_to, device=self.device, charge_valueme=self.current_state_value)
+        return super().save(*args, **kwargs)
 
 class ChargeStateRaport(models.Model):
     date = models.DateTimeField()

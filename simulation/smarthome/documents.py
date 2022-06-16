@@ -41,6 +41,7 @@ class DeviceRaportDocument(Document):
 
 @registry.register_document
 class WeatherDocument(Document):
+    solar_radiation = fields.FloatField(attr='solar_radiation')
     class Index:
         name = 'weather_raports'
         settings = {'number_of_shards': 1,
@@ -51,7 +52,6 @@ class WeatherDocument(Document):
         fields = [
             'datetime_from',
             'datetime_to',
-            'solar_radiation', 
             'temperature', 
             'wind_speed',
         ]

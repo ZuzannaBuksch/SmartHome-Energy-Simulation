@@ -1,19 +1,20 @@
 import json
 from datetime import datetime
 
+from django.db import transaction
 from django.forms.models import model_to_dict
+from django.shortcuts import get_object_or_404
 from rest_framework import generics, mixins, status, viewsets
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
-from .models import (Building, Device, DeviceRaport,  ChargeStateRaport,
-                     EnergyStorage,  StorageChargingAndUsageRaport)
+from .models import (Building, ChargeStateRaport, Device, DeviceRaport,
+                     EnergyStorage, StorageChargingAndUsageRaport)
 from .models_calculators import DeviceCalculateManager, EnergyCalculator
-from .serializers import (BuildingListSerializer, BuildingSerializer, StorageChargingAndUsageRaportSerializer,
-                        DeviceRaportSerializer, DeviceSerializer, ChargeStateRaportSerializer,
-                          DatesRangeSerializer)
-from django.shortcuts import get_object_or_404
-from django.db import transaction
+from .serializers import (BuildingListSerializer, BuildingSerializer,
+                          ChargeStateRaportSerializer, DatesRangeSerializer,
+                          DeviceRaportSerializer, DeviceSerializer,
+                          StorageChargingAndUsageRaportSerializer)
 
 
 class BuildingViewSet(viewsets.ModelViewSet):
@@ -206,11 +207,7 @@ class ChargeStateRaportView(generics.ListCreateAPIView):
 
     def get_queryset(self):
         queryset = self.queryset
-        device_queryset = queryset.filter(device__pk=self.kwargs["pk"])
-        start_date = self.request.query_params.get("start_date") 
-        end_date = self.request.query_params.get("end_date")
-        if start_date and end_date:
-            device_queryset = device_queryset.filter(date__range=[start_date, end_date])
+        device_queryset = [queryset.filter(device__pk=self.kwargs["pk"]).latest("date")]
         return device_queryset
     
     # @transaction.atomic

@@ -1,6 +1,6 @@
 
-from builtins import IndexError
 from abc import ABC
+from builtins import IndexError
 from datetime import datetime
 from typing import Dict
 
@@ -11,6 +11,7 @@ from elasticsearch_dsl.query import Q
 from .documents import (ChargeStateDocument, DeviceRaportDocument,
                         StorageChargingAndUsageDocument, WeatherDocument)
 from .models import ChargeStateRaport, Device
+
 
 class DeviceCalculateManager():
     """Manager class for choosing strategy for calculating device energy data"""
